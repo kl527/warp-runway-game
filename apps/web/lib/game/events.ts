@@ -1,10 +1,14 @@
-import type { ChoiceOption, GameState, LogEntry } from "./state";
+import type { ChoiceOption, GameState, LogEntry, RoleId } from "./state";
 
 export interface GameEventDef {
   id: string;
   weight: number;
   minWeek: number;
   condition?: (s: GameState) => boolean;
+  // Optional multiplier on the base weight. Used to bias the event roll toward
+  // archetypes the player has actually hired — marketers make viral hits more
+  // likely, engineers make ship events more likely, etc.
+  weightScale?: (s: GameState) => number;
   effect?: (s: GameState) => void;
   message: string;
   tone?: LogEntry["tone"];
@@ -15,11 +19,24 @@ export interface GameEventDef {
   };
 }
 
+function countRole(s: GameState, id: RoleId): number {
+  let n = 0;
+  for (const e of s.employees) if (e.role.id === id) n++;
+  return n;
+}
+
+function countCategory(s: GameState, cat: "engineering" | "design" | "gtm"): number {
+  let n = 0;
+  for (const e of s.employees) if (e.role.category === cat) n++;
+  return n;
+}
+
 export const EVENTS: GameEventDef[] = [
   {
     id: "viral_tweet",
     weight: 4,
     minWeek: 2,
+    weightScale: (s) => 1 + countRole(s, "marketer") * 0.6,
     message: "Your tweet went viral. +$5k cash, +$500 MRR.",
     tone: "good",
     effect: (s) => {
@@ -52,6 +69,8 @@ export const EVENTS: GameEventDef[] = [
     id: "hacker_news_front_page",
     weight: 2,
     minWeek: 3,
+    weightScale: (s) =>
+      1 + countRole(s, "marketer") * 0.4 + countCategory(s, "engineering") * 0.2,
     message: "Hacker News front page. +$3k MRR, team morale up.",
     tone: "good",
     effect: (s) => {
@@ -91,6 +110,7 @@ export const EVENTS: GameEventDef[] = [
     weight: 2,
     minWeek: 6,
     condition: (s) => s.employees.some((e) => e.role.id === "sales"),
+    weightScale: (s) => 1 + countRole(s, "sales") * 0.8,
     message: "Your AE closed a whale. +$15k cash.",
     tone: "good",
     effect: (s) => {
@@ -111,6 +131,7 @@ export const EVENTS: GameEventDef[] = [
     id: "open_source_contributor",
     weight: 2,
     minWeek: 4,
+    weightScale: (s) => 1 + countCategory(s, "engineering") * 0.25,
     message: "A stranger on GitHub fixed a bug. Morale +4.",
     tone: "good",
     effect: (s) => {
@@ -157,6 +178,8 @@ export const EVENTS: GameEventDef[] = [
     id: "conference_booth_win",
     weight: 2,
     minWeek: 7,
+    weightScale: (s) =>
+      1 + countRole(s, "marketer") * 0.4 + countRole(s, "sales") * 0.3,
     message: "Conference booth generated leads. +$2k MRR.",
     tone: "good",
     effect: (s) => {
@@ -276,6 +299,7 @@ export const EVENTS: GameEventDef[] = [
     id: "seo_win",
     weight: 2,
     minWeek: 5,
+    weightScale: (s) => 1 + countRole(s, "marketer") * 0.5,
     message: "Ranked #1 for your main keyword. +$1.2k MRR.",
     tone: "good",
     effect: (s) => {
@@ -303,6 +327,98 @@ export const EVENTS: GameEventDef[] = [
       s.employees = s.employees.map((e) => ({
         ...e,
         morale: Math.max(0, e.morale - 5),
+      }));
+    },
+  },
+  // ---- archetype surge events ----
+  // These only fire once the player has committed to a specific build.
+  // Weights scale with role count so a bigger eng team makes ship events
+  // more likely, a bigger sales team makes pipeline events more likely, etc.
+  {
+    id: "feature_ship",
+    weight: 2,
+    minWeek: 3,
+    condition: (s) => countCategory(s, "engineering") >= 2,
+    weightScale: (s) => 1 + countCategory(s, "engineering") * 0.5,
+    message: "Engineering shipped a new feature. Users noticed. +$900 MRR.",
+    tone: "good",
+    effect: (s) => {
+      s.revenuePerWeek += 900;
+    },
+  },
+  {
+    id: "tenx_week",
+    weight: 1,
+    minWeek: 6,
+    condition: (s) => countRole(s, "senior_eng") >= 2,
+    weightScale: (s) => 1 + countRole(s, "senior_eng") * 0.6,
+    message: "Senior eng pair rewrote the core path. +$2.5k MRR, +6 morale.",
+    tone: "good",
+    effect: (s) => {
+      s.revenuePerWeek += 2_500;
+      s.employees = s.employees.map((e) => ({
+        ...e,
+        morale: Math.min(100, e.morale + 6),
+      }));
+    },
+  },
+  {
+    id: "enterprise_flurry",
+    weight: 1,
+    minWeek: 6,
+    condition: (s) => countRole(s, "sales") >= 2,
+    weightScale: (s) => 1 + countRole(s, "sales") * 0.7,
+    message: "AEs chain-closed three mid-market deals. +$25k cash, +$1.5k MRR.",
+    tone: "good",
+    effect: (s) => {
+      s.balance += 25_000;
+      s.revenuePerWeek += 1_500;
+    },
+  },
+  {
+    id: "viral_hit",
+    weight: 1,
+    minWeek: 4,
+    condition: (s) => countRole(s, "marketer") >= 2,
+    weightScale: (s) => 1 + countRole(s, "marketer") * 0.9,
+    message: "A marketer's TikTok detonated. +$6k cash, +$1.8k MRR.",
+    tone: "good",
+    effect: (s) => {
+      s.balance += 6_000;
+      s.revenuePerWeek += 1_800;
+    },
+  },
+  {
+    id: "design_polish",
+    weight: 2,
+    minWeek: 4,
+    condition: (s) => countRole(s, "designer") >= 1,
+    weightScale: (s) => 1 + countRole(s, "designer") * 0.6,
+    message: "Design polish shipped. Onboarding conversion lifted. +$1.2k MRR.",
+    tone: "good",
+    effect: (s) => {
+      s.revenuePerWeek += 1_200;
+    },
+  },
+  {
+    id: "balanced_launch",
+    weight: 1,
+    minWeek: 6,
+    // Requires a real team — at least one of every category, 5+ headcount.
+    condition: (s) =>
+      s.employees.length >= 5 &&
+      countCategory(s, "engineering") >= 1 &&
+      countCategory(s, "design") >= 1 &&
+      countCategory(s, "gtm") >= 1,
+    weightScale: (s) => 1 + Math.min(s.employees.length - 5, 10) * 0.2,
+    message:
+      "You launched something people actually love. +$5k MRR, +10 morale across the board.",
+    tone: "good",
+    effect: (s) => {
+      s.revenuePerWeek += 5_000;
+      s.employees = s.employees.map((e) => ({
+        ...e,
+        morale: Math.min(100, e.morale + 10),
       }));
     },
   },
@@ -348,16 +464,27 @@ export const EVENTS: GameEventDef[] = [
   },
 ];
 
+function effectiveWeight(ev: GameEventDef, s: GameState): number {
+  const scale = ev.weightScale ? ev.weightScale(s) : 1;
+  return Math.max(0, ev.weight * scale);
+}
+
 export function rollEvent(s: GameState, rng: () => number): GameEventDef | null {
-  const eligible = EVENTS.filter(
-    (ev) => s.week >= ev.minWeek && (!ev.condition || ev.condition(s))
-  );
-  if (eligible.length === 0) return null;
-  const totalWeight = eligible.reduce((acc, ev) => acc + ev.weight, 0);
+  const eligible: { ev: GameEventDef; w: number }[] = [];
+  let totalWeight = 0;
+  for (const ev of EVENTS) {
+    if (s.week < ev.minWeek) continue;
+    if (ev.condition && !ev.condition(s)) continue;
+    const w = effectiveWeight(ev, s);
+    if (w <= 0) continue;
+    eligible.push({ ev, w });
+    totalWeight += w;
+  }
+  if (totalWeight <= 0) return null;
   let r = rng() * totalWeight;
-  for (const ev of eligible) {
-    r -= ev.weight;
+  for (const { ev, w } of eligible) {
+    r -= w;
     if (r <= 0) return ev;
   }
-  return eligible[eligible.length - 1];
+  return eligible[eligible.length - 1].ev;
 }

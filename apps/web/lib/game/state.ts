@@ -90,7 +90,7 @@ export interface GameState {
   round: RoundId;
   eventLog: LogEntry[];
   paused: boolean;
-  speed: 1 | 2 | 4;
+  speed: 1 | 2;
   gameOver: "burned" | "unicorn" | null;
   position: { x: number; y: number };
   modal: ModalState | null;

@@ -3,10 +3,14 @@
 import { useActions, useGameStore } from "@/lib/game/store";
 import { ModalShell } from "./ModalShell";
 import { useShallow } from "zustand/react/shallow";
+import { SYNERGIES, computeSynergies } from "@/lib/game/synergies";
 
 export function DashboardOverlay() {
   const actions = useActions();
   const history = useGameStore(useShallow((s) => s.history));
+  const employees = useGameStore((s) => s.employees);
+  const synergies = computeSynergies({ employees });
+  const activeIds = new Set(synergies.active.map((s) => s.id));
 
   const W = 600;
   const H = 200;
@@ -72,6 +76,41 @@ export function DashboardOverlay() {
             label="Peak headcount"
             value={`${Math.max(0, ...history.map((p) => p.headcount))}`}
           />
+        </div>
+        <div>
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="text-xs uppercase tracking-wider text-slate-400">
+              Team Synergies
+            </span>
+            <span className="text-xs text-emerald-300 tabular-nums">
+              {synergies.revenueMultiplier > 1
+                ? `×${synergies.revenueMultiplier.toFixed(2)} revenue`
+                : "no combos yet"}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+            {SYNERGIES.map((syn) => {
+              const on = activeIds.has(syn.id);
+              return (
+                <div
+                  key={syn.id}
+                  className={`border rounded px-2 py-1.5 text-[11px] flex items-baseline justify-between gap-3 ${
+                    on
+                      ? "border-emerald-600 bg-emerald-950/30 text-emerald-200"
+                      : "border-slate-800 bg-slate-950/40 text-slate-500"
+                  }`}
+                >
+                  <div>
+                    <div className="font-bold">{syn.label}</div>
+                    <div className="text-[10px] opacity-80">{syn.description}</div>
+                  </div>
+                  <div className="tabular-nums font-bold">
+                    ×{syn.multiplier.toFixed(2)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </ModalShell>

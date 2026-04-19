@@ -1,4 +1,4 @@
-export const TICK_MS = 3000;
+export const TICK_MS = 750;
 export const STARTING_BALANCE = 500_000;
 // Baseline weekly overhead independent of headcount: rent, ad spend,
 // software & tools, legal/accounting, etc. ~$130k/yr.

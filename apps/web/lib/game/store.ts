@@ -25,7 +25,7 @@ export interface GameActions {
   fundraise: (idx: number) => void;
   tick: () => void;
   togglePause: () => void;
-  setSpeed: (speed: 1 | 2 | 4) => void;
+  setSpeed: (speed: 1 | 2) => void;
   closeModal: () => void;
   resolveChoice: (choiceKey: string) => void;
   openAiCritic: (critique: string) => void;

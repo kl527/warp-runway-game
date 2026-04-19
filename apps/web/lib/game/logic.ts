@@ -18,6 +18,7 @@ import { nextHireCost, runwayWeeks, valuation, weeklyBurn } from "./valuation";
 import { teamDistribution } from "./selectors";
 import { ROLE_CATEGORIES } from "./constants";
 import { EVENTS, rollEvent, type GameEventDef } from "./events";
+import { computeSynergies } from "./synergies";
 
 // Deterministic-ish RNG seeded by rngSeed. Mulberry32.
 function makeRng(seed: number): () => number {
@@ -84,6 +85,9 @@ function recomputeRevenue(s: GameState): void {
     if (eff.revenue_delta) base += eff.revenue_delta;
     if (eff.revenue_multiplier_bonus) mult += eff.revenue_multiplier_bonus;
   }
+  // Composition synergies stack multiplicatively — the whole point is that
+  // the right mix of hires is worth more than the sum of their deltas.
+  mult *= computeSynergies(s).revenueMultiplier;
   // Morale modifier: 50% morale = 0.8x, 100% = 1.1x.
   const moraleMod = 0.8 + (s.morale / 100) * 0.3;
   s.revenuePerWeek = Math.max(0, Math.round(base * mult * moraleMod));
@@ -513,7 +517,7 @@ export function togglePause(s: GameState): GameState {
   return { ...s, paused: !s.paused };
 }
 
-export function setSpeed(s: GameState, speed: 1 | 2 | 4): GameState {
+export function setSpeed(s: GameState, speed: 1 | 2): GameState {
   return { ...s, speed };
 }
 

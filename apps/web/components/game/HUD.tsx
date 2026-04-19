@@ -77,10 +77,10 @@ export function HUD() {
           {hud.paused ? "▶" : "❚❚"}
         </button>
         <div className="flex rounded border border-slate-700 overflow-hidden">
-          {[1, 2, 4].map((s) => (
+          {[1, 2].map((s) => (
             <button
               key={s}
-              onClick={() => actions.setSpeed(s as 1 | 2 | 4)}
+              onClick={() => actions.setSpeed(s as 1 | 2)}
               className={`px-2 py-1 ${
                 hud.speed === s ? "bg-emerald-600 text-slate-950" : "hover:bg-slate-800"
               }`}
