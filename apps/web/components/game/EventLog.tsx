@@ -10,6 +10,7 @@ const TONE: Record<string, string> = {
   good: "text-emerald-300",
   bad: "text-rose-300",
   neutral: "text-slate-300",
+  warp: "text-fuchsia-400 font-bold",
 };
 
 export function EventLog() {

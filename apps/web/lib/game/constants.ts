@@ -1,4 +1,4 @@
-export const TICK_MS = 750;
+export const TICK_MS = 1000;
 export const STARTING_BALANCE = 500_000;
 // Baseline weekly overhead independent of headcount: rent, ad spend,
 // software & tools, legal/accounting, etc. ~$130k/yr.
@@ -24,6 +24,23 @@ export const VALUATION_MULTIPLIER = 10;
 export const COFFEE_MORALE_BOOST = 10;
 export const MORALE_BASELINE = 70;
 export const CRITIC_INTERVAL_WEEKS = 8;
+// Individual morale at which an employee starts threatening to quit (turns yellow).
+export const QUIT_MORALE_THRESHOLD = 35;
+// Ticks the player has to reach a yellow employee before they walk out.
+// TICK_MS is 1000ms, so 5 ticks = 5s of real time at speed 1.
+export const QUIT_DEADLINE_TICKS = 5;
+// Morale an employee is restored to when the player steps on their tile.
+export const RESCUE_MORALE_RESTORE = 80;
+// Morale hit on every remaining teammate when someone quits — attrition spreads.
+export const QUITTER_MORALE_PENALTY = 6;
+
+// Purple Warp easter eggs spawn randomly on the office floor. Walk over
+// one to unlock a real Warp.co feature and a small cash gift.
+export const EASTER_EGG_SPAWN_CHANCE = 0.18;
+export const EASTER_EGG_MAX_ON_BOARD = 3;
+export const EASTER_EGG_LIFETIME_WEEKS = 25;
+export const EASTER_EGG_CASH_GIFT = 3_000;
+export const EASTER_EGG_CHAR = "◆";
 
 export const WARP_URL = "https://www.warp.co";
 export const WARP_SIMULATOR_URL = "https://www.warp.co/simulator";

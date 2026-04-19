@@ -1,11 +1,19 @@
 import {
   COFFEE_MORALE_BOOST,
+  EASTER_EGG_CASH_GIFT,
+  EASTER_EGG_LIFETIME_WEEKS,
+  EASTER_EGG_MAX_ON_BOARD,
+  EASTER_EGG_SPAWN_CHANCE,
   EVENT_PROBABILITY,
   FUNDRAISE_ROUNDS,
   UNICORN_VALUATION,
   LOCATION_MULTIPLIERS,
   MAX_LOG_ENTRIES,
   MORALE_BASELINE,
+  QUIT_DEADLINE_TICKS,
+  QUIT_MORALE_THRESHOLD,
+  QUITTER_MORALE_PENALTY,
+  RESCUE_MORALE_RESTORE,
   SHUFFLE_EVERY_TICKS,
   STARTING_BALANCE,
 } from "./constants";
@@ -13,7 +21,8 @@ import type { LocationId } from "./constants";
 import { cellKey, getMap, inOffice, isWalkable, kindAt } from "./map";
 import { makeName } from "./names";
 import { roleById, ROLES } from "./roles";
-import type { ChoiceOption, Employee, GameState, LogEntry, Role, RoundId } from "./state";
+import type { ChoiceOption, EasterEgg, Employee, GameState, LogEntry, Role, RoundId } from "./state";
+import { pickWarpFeature, WARP_FEATURES } from "./warpFeatures";
 import { nextHireCost, runwayWeeks, valuation, weeklyBurn } from "./valuation";
 import { teamDistribution } from "./selectors";
 import { ROLE_CATEGORIES } from "./constants";
@@ -67,6 +76,7 @@ export function initialState(): GameState {
       },
     ],
     rngSeed: Math.floor(Math.random() * 2 ** 31),
+    easterEggs: [],
   };
 }
 
@@ -81,16 +91,20 @@ function recomputeRevenue(s: GameState): void {
   let base = 0;
   let mult = 1;
   for (const e of s.employees) {
+    // Yellow (quitting) employees have checked out — no output until rescued.
+    if (e.quittingSinceTick !== null) continue;
     const eff = e.role.weeklyEffect;
     if (eff.revenue_delta) base += eff.revenue_delta;
     if (eff.revenue_multiplier_bonus) mult += eff.revenue_multiplier_bonus;
   }
-  // Composition synergies stack multiplicatively — the whole point is that
-  // the right mix of hires is worth more than the sum of their deltas.
-  mult *= computeSynergies(s).revenueMultiplier;
   // Morale modifier: 50% morale = 0.8x, 100% = 1.1x.
   const moraleMod = 0.8 + (s.morale / 100) * 0.3;
-  s.revenuePerWeek = Math.max(0, Math.round(base * mult * moraleMod));
+  const preSynergy = base * mult * moraleMod;
+  // Synergies compare the pre-synergy revenue to burn so the ramen-profitable
+  // buff doesn't become self-referential once it kicks in.
+  const burn = weeklyBurn(s);
+  const syn = computeSynergies(s, { revenue: preSynergy, burn });
+  s.revenuePerWeek = Math.max(0, Math.round(preSynergy * syn.revenueMultiplier));
 }
 
 function recomputeMorale(s: GameState): void {
@@ -111,7 +125,56 @@ export function move(s: GameState, dx: number, dy: number): GameState {
   const nx = s.position.x + dx;
   const ny = s.position.y + dy;
   if (!isWalkable(map, nx, ny)) return s;
-  return { ...s, position: { x: nx, y: ny } };
+  let next: GameState = { ...s, position: { x: nx, y: ny } };
+  next = rescueAt(next, nx, ny);
+  return collectEggAt(next, nx, ny);
+}
+
+function rescueAt(s: GameState, x: number, y: number): GameState {
+  const idx = s.employees.findIndex(
+    (e) => e.x === x && e.y === y && e.quittingSinceTick !== null,
+  );
+  if (idx < 0) return s;
+  const target = s.employees[idx];
+  const employees = s.employees.slice();
+  employees[idx] = {
+    ...target,
+    morale: Math.max(target.morale, RESCUE_MORALE_RESTORE),
+    quittingSinceTick: null,
+  };
+  const next: GameState = {
+    ...s,
+    employees,
+    eventLog: s.eventLog.slice(),
+  };
+  recomputeMorale(next);
+  recomputeRevenue(next);
+  pushLog(next, {
+    week: next.week,
+    message: `Talked ${target.name} off the ledge. Morale restored.`,
+    tone: "good",
+  });
+  return next;
+}
+
+function collectEggAt(s: GameState, x: number, y: number): GameState {
+  const idx = s.easterEggs.findIndex((e) => e.x === x && e.y === y);
+  if (idx < 0) return s;
+  const egg = s.easterEggs[idx];
+  const feature =
+    WARP_FEATURES.find((f) => f.id === egg.featureId) ?? WARP_FEATURES[0];
+  const next: GameState = {
+    ...s,
+    balance: s.balance + EASTER_EGG_CASH_GIFT,
+    easterEggs: s.easterEggs.filter((_, i) => i !== idx),
+    eventLog: s.eventLog.slice(),
+  };
+  pushLog(next, {
+    week: next.week,
+    message: `◆ WARP PRESENT: ${feature.name}. ${feature.blurb} +$${EASTER_EGG_CASH_GIFT.toLocaleString()}.`,
+    tone: "warp",
+  });
+  return next;
 }
 
 // ---- interaction ----
@@ -208,6 +271,7 @@ export function hireMany(
       morale: 90,
       x: spot.x,
       y: spot.y,
+      quittingSinceTick: null,
     });
     next.rngSeed = (next.rngSeed + 1) >>> 0;
   }
@@ -239,6 +303,45 @@ function findOfficeSpot(
     return { x, y };
   }
   return { x: b.x0, y: b.y0 };
+}
+
+// ---- easter eggs ----
+
+function tickEasterEggs(s: GameState, rng: () => number): GameState {
+  // Despawn stale eggs.
+  const eggs = s.easterEggs.filter(
+    (e) => s.week - e.spawnedWeek <= EASTER_EGG_LIFETIME_WEEKS
+  );
+  let changed = eggs.length !== s.easterEggs.length;
+
+  // Maybe spawn a new one.
+  if (eggs.length < EASTER_EGG_MAX_ON_BOARD && rng() < EASTER_EGG_SPAWN_CHANCE) {
+    const map = getMap(s.round);
+    const occupied = new Set<string>([
+      cellKey(s.position.x, s.position.y),
+      ...s.employees.map((e) => cellKey(e.x, e.y)),
+      ...eggs.map((e) => cellKey(e.x, e.y)),
+    ]);
+    const b = map.officeBounds;
+    for (let tries = 0; tries < 80; tries++) {
+      const x = b.x0 + Math.floor(rng() * (b.x1 - b.x0 + 1));
+      const y = b.y0 + Math.floor(rng() * (b.y1 - b.y0 + 1));
+      if (!isWalkable(map, x, y)) continue;
+      if (occupied.has(cellKey(x, y))) continue;
+      const feature = pickWarpFeature(rng);
+      const egg: EasterEgg = {
+        id: `egg-${s.week}-${x}-${y}`,
+        x,
+        y,
+        spawnedWeek: s.week,
+        featureId: feature.id,
+      };
+      eggs.push(egg);
+      changed = true;
+      break;
+    }
+  }
+  return changed ? { ...s, easterEggs: eggs } : s;
 }
 
 // ---- fundraise ----
@@ -296,6 +399,7 @@ export function fundraise(s: GameState, idx: number): GameState {
     position: playerPos,
     modal: null,
     paused: false,
+    easterEggs: [],
   };
   pushLog(next, {
     week: s.week,
@@ -320,17 +424,69 @@ export function tick(s: GameState): GameState {
     eventLog: s.eventLog.slice(),
     history: s.history.slice(),
     capTable: { ...s.capTable, investors: s.capTable.investors.slice() },
+    easterEggs: s.easterEggs.slice(),
   };
 
   // Morale drift toward baseline 70; gentle decay if no coffee in 5 weeks.
+  // Already-quitting employees do NOT drift back up — only rescue clears the flag.
   const sinceCoffee = next.week - next.lastInteractionWeek;
   next.employees = next.employees.map((e) => {
     let m = e.morale;
-    const toward = MORALE_BASELINE;
-    m += (toward - m) * 0.08;
-    if (sinceCoffee > 5) m -= 1.5;
-    return { ...e, morale: Math.max(0, Math.min(100, m)) };
+    if (e.quittingSinceTick === null) {
+      const toward = MORALE_BASELINE;
+      m += (toward - m) * 0.08;
+      if (sinceCoffee > 5) m -= 1.5;
+    } else {
+      // Yellow employees slide further toward the exit each tick.
+      m -= 2;
+    }
+    const clamped = Math.max(0, Math.min(100, m));
+    let quittingSinceTick = e.quittingSinceTick;
+    if (quittingSinceTick === null && clamped < QUIT_MORALE_THRESHOLD) {
+      quittingSinceTick = next.tickCount;
+    }
+    return { ...e, morale: clamped, quittingSinceTick };
   });
+
+  // Process quitters: anyone who has been yellow past the deadline walks.
+  const quitters: Employee[] = [];
+  next.employees = next.employees.filter((e) => {
+    if (
+      e.quittingSinceTick !== null &&
+      next.tickCount - e.quittingSinceTick >= QUIT_DEADLINE_TICKS
+    ) {
+      quitters.push(e);
+      return false;
+    }
+    return true;
+  });
+  if (quitters.length > 0) {
+    // Attrition contagion: every remaining teammate takes a morale hit.
+    const penalty = QUITTER_MORALE_PENALTY * quitters.length;
+    next.employees = next.employees.map((e) => ({
+      ...e,
+      morale: Math.max(0, e.morale - penalty),
+    }));
+    for (const q of quitters) {
+      pushLog(next, {
+        week: next.week,
+        message: `${q.name} (${q.role.name}) quit. Team morale −${penalty}.`,
+        tone: "bad",
+      });
+    }
+  }
+
+  // Fresh yellow-flag notifications — log once when they start threatening.
+  next.employees.forEach((e) => {
+    if (e.quittingSinceTick === next.tickCount) {
+      pushLog(next, {
+        week: next.week,
+        message: `${e.name} (${e.role.name}) is about to quit. Step on them to save them.`,
+        tone: "bad",
+      });
+    }
+  });
+
   recomputeMorale(next);
   recomputeRevenue(next);
 
@@ -349,6 +505,9 @@ export function tick(s: GameState): GameState {
       next = applyEvent(next, ev);
     }
   }
+
+  // Easter egg spawn + despawn (Warp presents).
+  next = tickEasterEggs(next, rng);
 
   next.peakHeadcount = Math.max(next.peakHeadcount, next.employees.length);
 

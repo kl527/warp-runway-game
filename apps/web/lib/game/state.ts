@@ -39,12 +39,23 @@ export interface Employee {
   morale: number;
   x: number;
   y: number;
+  // Set when morale cratered and the employee started threatening to quit.
+  // Cleared when the player steps on their tile in time.
+  quittingSinceTick: number | null;
 }
 
 export interface LogEntry {
   week: number;
   message: string;
-  tone: "good" | "bad" | "neutral";
+  tone: "good" | "bad" | "neutral" | "warp";
+}
+
+export interface EasterEgg {
+  id: string;
+  x: number;
+  y: number;
+  spawnedWeek: number;
+  featureId: string;
 }
 
 export interface CapTable {
@@ -98,4 +109,5 @@ export interface GameState {
   tickCount: number;
   history: HistoryPoint[];
   rngSeed: number;
+  easterEggs: EasterEgg[];
 }
