@@ -9,6 +9,7 @@ import {
   interact as pureInteract,
   move as pureMove,
   openAiCritic as pureOpenAiCritic,
+  applyCriticVerdict as pureApplyCriticVerdict,
   resolveChoice as pureResolveChoice,
   setSpeed as pureSetSpeed,
   tick as pureTick,
@@ -28,6 +29,7 @@ export interface GameActions {
   closeModal: () => void;
   resolveChoice: (choiceKey: string) => void;
   openAiCritic: (critique: string) => void;
+  applyCriticVerdict: (verdict: "good" | "bad", amount: number) => void;
   reset: () => void;
 }
 
@@ -48,6 +50,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     closeModal: () => set((s) => pureCloseModal(s)),
     resolveChoice: (key) => set((s) => pureResolveChoice(s, key)),
     openAiCritic: (critique) => set((s) => pureOpenAiCritic(s, critique)),
+    applyCriticVerdict: (verdict, amount) =>
+      set((s) => pureApplyCriticVerdict(s, verdict, amount)),
     reset: () => set(() => ({ ...initialState(), actions: get().actions })),
   },
 }));

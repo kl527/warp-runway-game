@@ -35,13 +35,14 @@ export const selectSpeed = (s: GameState) => s.speed;
 
 export const selectHUD = (s: GameState) => {
   const dist = teamDistribution(s);
+  const burn = weeklyBurn(s);
   return {
     week: s.week,
     balance: s.balance,
     startingBalance: s.startingBalance,
-    burn: weeklyBurn(s),
+    burn,
     revenue: s.revenuePerWeek,
-    runway: runwayWeeks(s),
+    runway: runwayWeeks(s, burn),
     morale: s.morale,
     valuation: valuation(s),
     founders: s.capTable.founders,

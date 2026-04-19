@@ -6,6 +6,12 @@ export const BASE_WEEKLY_BURN = 2_500;
 // Signing-bonus market premium per existing hire of the same role.
 // Scaling one function 10-deep gets dramatically more expensive than the first.
 export const MARKET_PREMIUM_PER_COPY = 0.15;
+// One-time per-hire setup: laptop, monitor, software seats, onboarding.
+// Flat across roles — even a cheap junior still needs gear.
+export const HIRE_SETUP_COST = 4_000;
+// Recruiter fee as a fraction of first-year salary (external sourcing).
+// Real market is 20–25%; tuned down so game stays playable.
+export const RECRUITER_FEE_PCT = 0.15;
 
 export type RoleCategory = "engineering" | "design" | "gtm";
 export const ROLE_CATEGORIES: RoleCategory[] = ["engineering", "design", "gtm"];

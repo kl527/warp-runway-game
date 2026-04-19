@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ROLES } from "@/lib/game/roles";
 import {
   LOCATION_MULTIPLIERS,
@@ -8,7 +8,7 @@ import {
   type LocationId,
 } from "@/lib/game/constants";
 import { useActions, useGameStore } from "@/lib/game/store";
-import { nextHireCost, singleHireCost } from "@/lib/game/valuation";
+import { calcHireCost, headcountByRole } from "@/lib/game/valuation";
 import { ModalShell } from "./ModalShell";
 import { useHireSound } from "@/lib/game/sounds";
 
@@ -22,6 +22,8 @@ export function HireModal() {
   const [location, setLocation] = useState<LocationId>("SF");
   const [qtyByRole, setQtyByRole] = useState<Record<string, number>>({});
   const playHire = useHireSound();
+
+  const counts = useMemo(() => headcountByRole(employees), [employees]);
 
   const setQty = (roleId: string, q: number) =>
     setQtyByRole((prev) => ({
@@ -52,9 +54,15 @@ export function HireModal() {
           const mult = LOCATION_MULTIPLIERS[location];
           const weeklySalary = Math.round((role.baseSalary * mult) / 52);
           const qty = qtyByRole[role.id] ?? 1;
-          const existing = employees.filter((e) => e.role.id === role.id).length;
-          const nextCost = singleHireCost({ employees }, role.id);
-          const totalCost = nextHireCost({ employees }, role.id, qty);
+          const existing = counts.get(role.id) ?? 0;
+          const nextBreakdown = role.disabled
+            ? null
+            : calcHireCost(role, existing, 1, location);
+          const breakdown = role.disabled
+            ? null
+            : calcHireCost(role, existing, qty, location);
+          const nextCost = nextBreakdown?.total ?? 0;
+          const totalCost = breakdown?.total ?? 0;
           const unaffordable = balance < totalCost;
           const disabled = role.disabled || unaffordable;
           const hasPremium = existing > 0 || qty > 1;
@@ -99,14 +107,16 @@ export function HireModal() {
                       Weekly: <span className="text-slate-200">${weeklySalary.toLocaleString()}</span>
                     </div>
                     <div>
-                      Next signing:{" "}
+                      Next all-in:{" "}
                       <span className="text-slate-200">
                         ${nextCost.toLocaleString()}
                       </span>
-                      {existing > 0 && (
-                        <span className="text-amber-300">
+                      {nextBreakdown && (
+                        <span className="text-slate-500">
                           {" "}
-                          (base ${role.signingBonus.toLocaleString()})
+                          (sign ${nextBreakdown.signing.toLocaleString()} +
+                          recruiter ${nextBreakdown.recruiter.toLocaleString()} +
+                          setup ${nextBreakdown.setup.toLocaleString()})
                         </span>
                       )}
                     </div>

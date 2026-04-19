@@ -1,20 +1,29 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { streamText, type ModelMessage } from "ai";
+import { generateText } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { BOARD_OBSERVER_SYSTEM } from "@/lib/ai/prompts";
+import {
+  BOARD_OBSERVER_JUDGE_SYSTEM,
+  BOARD_OBSERVER_JUDGE_USER,
+} from "@/lib/ai/prompts";
 
 export const runtime = "edge";
 
-const messageSchema = z.object({
-  role: z.enum(["user", "assistant"]),
-  content: z.string().min(1).max(4000),
+const bodySchema = z.object({
+  answer: z.string().min(1).max(2000),
 });
 
-const bodySchema = z.object({
-  messages: z.array(messageSchema).min(1).max(20),
+const verdictSchema = z.object({
+  verdict: z.enum(["good", "bad"]),
+  reply: z.string().min(1).max(600),
 });
+
+function extractJson(text: string): unknown {
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("no json");
+  return JSON.parse(match[0]);
+}
 
 export async function POST(req: Request): Promise<Response> {
   let parsed;
@@ -35,17 +44,18 @@ export async function POST(req: Request): Promise<Response> {
 
   const workersai = createWorkersAI({ binding: ai });
 
-  const messages: ModelMessage[] = parsed.messages.map((m) => ({
-    role: m.role,
-    content: m.content,
-  }));
+  try {
+    const { text } = await generateText({
+      model: workersai("@cf/openai/gpt-oss-120b"),
+      system: BOARD_OBSERVER_JUDGE_SYSTEM,
+      prompt: BOARD_OBSERVER_JUDGE_USER(parsed.answer),
+      temperature: 0.7,
+    });
 
-  const result = streamText({
-    model: workersai("@cf/openai/gpt-oss-120b"),
-    system: BOARD_OBSERVER_SYSTEM,
-    messages,
-    temperature: 0.9,
-  });
-
-  return result.toTextStreamResponse();
+    const result = verdictSchema.parse(extractJson(text));
+    return NextResponse.json(result);
+  } catch (err) {
+    console.error("judge error", err);
+    return NextResponse.json({ error: "model error" }, { status: 502 });
+  }
 }

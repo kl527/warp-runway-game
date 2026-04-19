@@ -177,7 +177,7 @@ export function hireMany(
   if (s.gameOver || qty <= 0) return s;
   const role = roleById(roleId);
   if (!role || role.disabled) return s;
-  const totalCost = nextHireCost(s, roleId, qty);
+  const totalCost = nextHireCost(s, roleId, qty, location);
   if (s.balance < totalCost) return s;
 
   const map = getMap(s.round);
@@ -214,7 +214,7 @@ export function hireMany(
   const qtyLabel = qty > 1 ? `${qty}× ` : "";
   pushLog(next, {
     week: s.week,
-    message: `Hired ${qtyLabel}${role.name} (${location}). Signing total: $${totalCost.toLocaleString()}.`,
+    message: `Hired ${qtyLabel}${role.name} (${location}). All-in hiring cost: $${totalCost.toLocaleString()} (signing + recruiter + setup).`,
     tone: "good",
   });
   return next;
@@ -483,6 +483,29 @@ export function openAiCritic(s: GameState, critique: string): GameState {
     modal: { kind: "ai_critic", payload: { critique } },
     paused: true,
   };
+}
+
+export function applyCriticVerdict(
+  s: GameState,
+  verdict: "good" | "bad",
+  amount: number,
+): GameState {
+  const delta = verdict === "good" ? amount : -amount;
+  const next: GameState = { ...s, balance: s.balance + delta };
+  pushLog(next, {
+    week: next.week,
+    message:
+      verdict === "good"
+        ? `The Observer approved. Investor wires +$${Math.round(amount / 1000)}k.`
+        : `The Observer was unimpressed. Burned $${Math.round(amount / 1000)}k cleaning up.`,
+    tone: verdict === "good" ? "good" : "bad",
+  });
+  if (next.balance <= 0 && !next.gameOver) {
+    next.balance = 0;
+    next.gameOver = "burned";
+    next.paused = true;
+  }
+  return next;
 }
 
 export function togglePause(s: GameState): GameState {

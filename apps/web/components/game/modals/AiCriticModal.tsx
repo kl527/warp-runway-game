@@ -4,18 +4,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useActions, useGameStore } from "@/lib/game/store";
 import { ModalShell } from "./ModalShell";
 
-type ChatMessage = { role: "assistant" | "user"; content: string };
+const VERDICT_AMOUNT = 250_000;
 
 export function AiCriticModal() {
   const actions = useActions();
   const modal = useGameStore((s) => s.modal);
-  const critique = modal?.kind === "ai_critic" ? modal.payload?.critique ?? "" : "";
+  const question = modal?.kind === "ai_critic" ? modal.payload?.critique ?? "" : "";
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: "assistant", content: critique },
-  ]);
   const [input, setInput] = useState("");
-  const [streaming, setStreaming] = useState(false);
+  const [phase, setPhase] = useState<"asking" | "judging" | "settled">("asking");
+  const [verdict, setVerdict] = useState<"good" | "bad" | null>(null);
+  const [reply, setReply] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -24,15 +24,10 @@ export function AiCriticModal() {
 
   const send = useCallback(async () => {
     const trimmed = input.trim();
-    if (!trimmed || streaming) return;
+    if (!trimmed || phase !== "asking") return;
 
-    const nextHistory: ChatMessage[] = [
-      ...messages,
-      { role: "user", content: trimmed },
-    ];
-    setMessages(nextHistory);
-    setInput("");
-    setStreaming(true);
+    setPhase("judging");
+    setError(null);
 
     const ac = new AbortController();
     abortRef.current = ac;
@@ -41,42 +36,37 @@ export function AiCriticModal() {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ messages: nextHistory }),
+        body: JSON.stringify({ answer: trimmed }),
         signal: ac.signal,
       });
-      if (!res.ok || !res.body) {
-        setMessages((m) => [
-          ...m,
-          {
-            role: "assistant",
-            content: "(The Observer's line dropped. Try again later.)",
-          },
-        ]);
+      if (!res.ok) {
+        setError("The Observer's line dropped.");
+        setPhase("asking");
         return;
       }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let acc = "";
-      setMessages((m) => [...m, { role: "assistant", content: "" }]);
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        acc += decoder.decode(value, { stream: true });
-        setMessages((m) => {
-          const copy = m.slice();
-          copy[copy.length - 1] = { role: "assistant", content: acc };
-          return copy;
-        });
+      const data = (await res.json()) as {
+        verdict?: "good" | "bad";
+        reply?: string;
+      };
+      if (!data.verdict || !data.reply) {
+        setError("Unreadable verdict. Try again.");
+        setPhase("asking");
+        return;
       }
+      setVerdict(data.verdict);
+      setReply(data.reply);
+      actions.applyCriticVerdict(data.verdict, VERDICT_AMOUNT);
+      setPhase("settled");
     } catch (err) {
       if ((err as { name?: string }).name !== "AbortError") {
         console.error(err);
+        setError("Connection lost.");
+        setPhase("asking");
       }
     } finally {
-      setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, messages, streaming]);
+  }, [input, phase, actions]);
 
   const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -86,52 +76,65 @@ export function AiCriticModal() {
   };
 
   return (
-    <ModalShell title="The Board Observer" onClose={actions.closeModal} wide>
-      <div className="flex flex-col gap-3 max-h-[60vh] overflow-y-auto pr-1">
-        {messages.map((m, i) => (
-          <div
-            key={i}
-            className={
-              m.role === "assistant"
-                ? "border-l-2 border-emerald-500 pl-3 text-slate-200"
-                : "border-l-2 border-slate-600 pl-3 text-slate-400 italic"
-            }
-          >
-            <div className="text-[10px] uppercase tracking-wider mb-1 text-slate-500">
-              {m.role === "assistant" ? "Observer" : "You"}
-            </div>
-            <div className="whitespace-pre-wrap text-sm">
-              {m.content || (streaming && i === messages.length - 1 ? "..." : "")}
-            </div>
-          </div>
-        ))}
+    <ModalShell title="The Board Observer" onClose={actions.closeModal}>
+      <div className="border-l-2 border-emerald-500 pl-3 text-slate-200">
+        <div className="text-[10px] uppercase tracking-wider mb-1 text-slate-500">
+          Observer
+        </div>
+        <div className="whitespace-pre-wrap text-sm">{question}</div>
       </div>
-      <div className="mt-4 flex flex-col gap-2">
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={onKey}
-          placeholder="Defend yourself. (Enter to send, Shift+Enter for newline)"
-          rows={3}
-          disabled={streaming}
-          className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
-        />
-        <div className="flex justify-between items-center">
+
+      {phase === "settled" && (
+        <div
+          className={`mt-4 border-l-2 pl-3 ${
+            verdict === "good"
+              ? "border-emerald-400 text-emerald-200"
+              : "border-rose-500 text-rose-200"
+          }`}
+        >
+          <div className="text-[10px] uppercase tracking-wider mb-1 opacity-70">
+            Verdict — {verdict === "good" ? "approved" : "rejected"}
+          </div>
+          <div className="whitespace-pre-wrap text-sm">{reply}</div>
+          <div className="mt-2 text-xs font-mono">
+            Balance {verdict === "good" ? "+" : "−"}$
+            {(VERDICT_AMOUNT / 1000).toFixed(0)}k
+          </div>
+        </div>
+      )}
+
+      {phase !== "settled" ? (
+        <div className="mt-4 flex flex-col gap-2">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={onKey}
+            placeholder="Answer in one line. (Enter to send)"
+            rows={2}
+            disabled={phase === "judging"}
+            className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
+          />
+          {error && <div className="text-xs text-rose-400">{error}</div>}
+          <div className="flex justify-end">
+            <button
+              onClick={() => void send()}
+              disabled={phase === "judging" || !input.trim()}
+              className="px-4 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed rounded text-white"
+            >
+              {phase === "judging" ? "..." : "Send"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 flex justify-end">
           <button
             onClick={actions.closeModal}
-            className="text-xs text-slate-500 hover:text-slate-200"
+            className="px-4 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded text-white"
           >
-            Dismiss
-          </button>
-          <button
-            onClick={() => void send()}
-            disabled={streaming || !input.trim()}
-            className="px-4 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed rounded text-white"
-          >
-            {streaming ? "..." : "Send"}
+            Back to work
           </button>
         </div>
-      </div>
+      )}
     </ModalShell>
   );
 }
