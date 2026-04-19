@@ -21,6 +21,7 @@ import { ChoiceModal } from "./modals/ChoiceModal";
 import { AiCriticModal } from "./modals/AiCriticModal";
 import { PauseModal } from "./modals/PauseModal";
 import { BuildingEggModal } from "./modals/BuildingEggModal";
+import { NewsletterModal } from "./modals/NewsletterModal";
 import { EndScreen } from "./EndScreen";
 import { MobileBlock } from "./MobileBlock";
 import { useSoundEffects } from "@/lib/game/useSoundEffects";
@@ -182,6 +183,7 @@ export function GameShell() {
         {modal?.kind === "choice" && <ChoiceModal key="choice" />}
         {modal?.kind === "ai_critic" && <AiCriticModal key="aicritic" />}
         {modal?.kind === "building_egg" && <BuildingEggModal key="egg" />}
+        {modal?.kind === "newsletter" && <NewsletterModal key="newsletter" />}
         {paused && !modal && !gameOver && <PauseModal key="pause" />}
       </AnimatePresence>
       {gameOver && <EndScreen />}
