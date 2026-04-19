@@ -2,11 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ROLES } from "@/lib/game/roles";
-import {
-  LOCATION_MULTIPLIERS,
-  MARKET_PREMIUM_PER_COPY,
-  type LocationId,
-} from "@/lib/game/constants";
+import { LOCATION_MULTIPLIERS, type LocationId } from "@/lib/game/constants";
 import { useActions, useGameStore } from "@/lib/game/store";
 import { calcHireCost, headcountByRole } from "@/lib/game/valuation";
 import { getMap, officeCapacity } from "@/lib/game/map";
@@ -83,7 +79,6 @@ export function HireModal() {
           const unaffordable = balance < totalCost;
           const overCapacity = !role.disabled && qty > freeSeats;
           const disabled = role.disabled || unaffordable || overCapacity;
-          const hasPremium = existing > 0 || qty > 1;
           return (
             <div
               key={role.id}
@@ -138,11 +133,6 @@ export function HireModal() {
                     <div className="text-emerald-300">
                       {formatEffect(role.weeklyEffect)}
                     </div>
-                    {hasPremium && (
-                      <div className="text-[10px] text-amber-400/80">
-                        +{Math.round(MARKET_PREMIUM_PER_COPY * 100)}% market premium per duplicate
-                      </div>
-                    )}
                   </div>
                   <div className="mt-2 flex items-center gap-2">
                     <div className="flex items-center rounded border border-slate-700 overflow-hidden">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useGameStore } from "@/lib/game/store";
 import { cellKey, getMap } from "@/lib/game/map";
 import {
@@ -9,8 +9,11 @@ import {
   selectPosition,
 } from "@/lib/game/selectors";
 import { Cell, type DisplayKind } from "./Cell";
+import { FloorArt } from "./FloorArt";
+import { FloatingToasts } from "./FloatingToasts";
 import { useShallow } from "zustand/react/shallow";
 import { EASTER_EGG_CHAR } from "@/lib/game/constants";
+import { useScreenShake } from "@/lib/game/useScreenShake";
 
 export function GameCanvas() {
   const position = useGameStore(selectPosition);
@@ -46,15 +49,34 @@ export function GameCanvas() {
     gridTemplateRows: `repeat(${map.height}, 1em)`,
   };
 
+  const { shakeKey } = useScreenShake();
+  const stageRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (shakeKey === 0) return;
+    const el = stageRef.current;
+    if (!el) return;
+    el.classList.remove("animate-screen-shake");
+    // Force reflow so the browser restarts the animation.
+    void el.offsetHeight;
+    el.classList.add("animate-screen-shake");
+    const t = window.setTimeout(() => {
+      el.classList.remove("animate-screen-shake");
+    }, 450);
+    return () => window.clearTimeout(t);
+  }, [shakeKey]);
+
   return (
     <div className="flex flex-col items-center gap-2">
       <InteractHint nearby={nearby} />
       <div
-        className="game-grid text-sm md:text-base"
-        style={gridStyle}
+        ref={stageRef}
+        className="game-stage text-sm md:text-base"
         aria-label="Office map"
       >
-        {map.cells.map((base) => {
+        <FloorArt round={round} />
+        <div className="game-grid" style={gridStyle}>
+          {map.cells.map((base) => {
           const key = cellKey(base.x, base.y);
           let char = base.char;
           let kind: DisplayKind = base.kind;
@@ -72,8 +94,10 @@ export function GameCanvas() {
           } else if (key === readyKey) {
             ready = true;
           }
-          return <Cell key={key} char={char} kind={kind} ready={ready} />;
-        })}
+            return <Cell key={key} char={char} kind={kind} ready={ready} />;
+          })}
+        </div>
+        <FloatingToasts map={map} playerX={position.x} playerY={position.y} />
       </div>
     </div>
   );

@@ -34,6 +34,7 @@ import {
   MAX_CHURN_RATE,
   MAX_LOG_ENTRIES,
   MORALE_BASELINE,
+  BACKGROUND_QUIT_INTERVAL_WEEKS,
   QUIT_DEADLINE_TICKS,
   QUIT_MORALE_THRESHOLD,
   QUITTER_MORALE_PENALTY,
@@ -650,8 +651,11 @@ export function tick(s: GameState): GameState {
     let m = e.morale;
     if (e.quittingSinceTick === null) {
       const toward = MORALE_BASELINE;
-      m += (toward - m) * 0.08;
-      if (sinceCoffee > 5) m -= 1.5;
+      m += (toward - m) * 0.05;
+      // Coffee staleness is the main deterministic quit driver: every week
+      // without a coffee run, morale drops by a fixed amount. Skip a few and
+      // someone turns yellow on a predictable cadence.
+      if (sinceCoffee > 2) m -= 3;
       if (imbalance.penalty > 0) m -= imbalance.penalty;
     } else {
       // Yellow employees slide further toward the exit each tick.
@@ -664,6 +668,30 @@ export function tick(s: GameState): GameState {
     }
     return { ...e, morale: clamped, quittingSinceTick };
   });
+
+  // Background attrition — even a happy team loses someone on a schedule.
+  // Every N weeks, flip the lowest-morale non-quitting employee to yellow
+  // regardless of threshold, so the quit loop never fully stalls.
+  if (
+    next.week > 0 &&
+    next.week % BACKGROUND_QUIT_INTERVAL_WEEKS === 0 &&
+    next.employees.length > 0
+  ) {
+    let targetId: string | null = null;
+    let lowest = Infinity;
+    for (const e of next.employees) {
+      if (e.quittingSinceTick !== null) continue;
+      if (e.morale < lowest) {
+        lowest = e.morale;
+        targetId = e.id;
+      }
+    }
+    if (targetId !== null) {
+      next.employees = next.employees.map((e) =>
+        e.id === targetId ? { ...e, quittingSinceTick: next.tickCount } : e,
+      );
+    }
+  }
 
   if (
     imbalance.penalty > 0 &&

@@ -11,6 +11,17 @@ export type CellKind =
 
 export type DoorKind = "hire" | "vc" | "dashboard" | "coffee";
 
+export type RoomKind = DoorKind | "lounge" | "lab" | "allhands";
+
+export interface RoomRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  kind: RoomKind;
+  label: string;
+}
+
 export interface BaseCell {
   x: number;
   y: number;
@@ -61,6 +72,15 @@ interface RoomSpec {
   doorOffset: number;     // x offset within the room for the door char
 }
 
+interface DecorSpec {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  label?: string;
+  kind?: "lounge" | "lab" | "allhands";
+}
+
 interface MapSpec {
   width: number;
   height: number;
@@ -70,7 +90,7 @@ interface MapSpec {
   // floating decorative letters (e.g. COFFEE marker "C" placed on open floor)
   markers?: Array<{ x: number; y: number; char: string; doorKind?: DoorKind }>;
   // decorative rectangles that are drawn as walls only (no door)
-  decor?: Array<{ x: number; y: number; w: number; h: number; label?: string }>;
+  decor?: DecorSpec[];
 }
 
 function blankRow(width: number): string[] {
@@ -162,11 +182,20 @@ function buildMap(round: RoundId, spec: MapSpec): MapDef {
     write(grid[d.y + d.h - 1], d.x, "└" + "─".repeat(innerW) + "┘");
   }
 
-  // Paint the office floor with "." so shuffle/hire can find spots.
-  const { x0, y0, x1, y1 } = spec.officeBounds;
-  for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
-      if (grid[y][x] === " ") grid[y][x] = ".";
+  // Paint dots on every walkable tile inside the outer walls — everywhere
+  // except room interiors — so players can see the full walkable area.
+  const allRoomRects = [...spec.rooms, ...(spec.decor ?? [])];
+  const insideAnyRoom = (x: number, y: number) => {
+    for (const r of allRoomRects) {
+      if (x > r.x && x < r.x + r.w - 1 && y > r.y && y < r.y + r.h - 1) {
+        return true;
+      }
+    }
+    return false;
+  };
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      if (grid[y][x] === " " && !insideAnyRoom(x, y)) grid[y][x] = ".";
     }
   }
 
@@ -244,7 +273,7 @@ function buildMap(round: RoundId, spec: MapSpec): MapDef {
 
 const PRE_SEED: MapSpec = {
   width: 36,
-  height: 14,
+  height: 16,
   officeBounds: { x0: 3, y0: 6, x1: 32, y1: 10 },
   spawn: { x: 6, y: 8 },
   rooms: [
@@ -254,7 +283,7 @@ const PRE_SEED: MapSpec = {
       w: 9,
       h: 4,
       label: "HIRE",
-      fillRows: [" $$$$$ ", " HHHHH "],
+      fillRows: [],
       doorKind: "hire",
       doorChar: "H",
       doorSide: "bottom",
@@ -266,7 +295,7 @@ const PRE_SEED: MapSpec = {
       w: 8,
       h: 4,
       label: "VC",
-      fillRows: [" VCVC ", " VVVV "],
+      fillRows: [],
       doorKind: "vc",
       doorChar: "V",
       doorSide: "bottom",
@@ -275,33 +304,33 @@ const PRE_SEED: MapSpec = {
     {
       x: 23,
       y: 1,
-      w: 10,
+      w: 11,
       h: 4,
-      label: "DASH",
-      fillRows: [" ~~~~~~ ", " BBBBBB "],
+      label: "DASHBOARD",
+      fillRows: [],
       doorKind: "dashboard",
       doorChar: "B",
       doorSide: "bottom",
-      doorOffset: 4,
+      doorOffset: 5,
     },
     {
       x: 2,
       y: 11,
-      w: 8,
-      h: 2,
-      label: "COFF",
+      w: 10,
+      h: 4,
+      label: "COFFEE",
       fillRows: [],
       doorKind: "coffee",
       doorChar: "C",
       doorSide: "top",
-      doorOffset: 3,
+      doorOffset: 5,
     },
   ],
 };
 
 const SEED: MapSpec = {
   width: 46,
-  height: 16,
+  height: 18,
   officeBounds: { x0: 3, y0: 6, x1: 42, y1: 12 },
   spawn: { x: 6, y: 9 },
   rooms: [
@@ -311,7 +340,7 @@ const SEED: MapSpec = {
       w: 10,
       h: 4,
       label: "HIRE",
-      fillRows: [" $$$$$$ ", " HHHHHH "],
+      fillRows: [],
       doorKind: "hire",
       doorChar: "H",
       doorSide: "bottom",
@@ -323,7 +352,7 @@ const SEED: MapSpec = {
       w: 10,
       h: 4,
       label: "VC",
-      fillRows: [" VCVCVC ", " VVVVVV "],
+      fillRows: [],
       doorKind: "vc",
       doorChar: "V",
       doorSide: "bottom",
@@ -335,7 +364,7 @@ const SEED: MapSpec = {
       w: 14,
       h: 4,
       label: "DASHBOARD",
-      fillRows: [" ~~~~~~~~~~ ", " BBBBBBBBBB "],
+      fillRows: [],
       doorKind: "dashboard",
       doorChar: "B",
       doorSide: "bottom",
@@ -344,22 +373,22 @@ const SEED: MapSpec = {
     {
       x: 2,
       y: 13,
-      w: 9,
-      h: 2,
-      label: "COFF",
+      w: 10,
+      h: 4,
+      label: "COFFEE",
       fillRows: [],
       doorKind: "coffee",
       doorChar: "C",
       doorSide: "top",
-      doorOffset: 4,
+      doorOffset: 5,
     },
   ],
-  decor: [{ x: 36, y: 13, w: 8, h: 2, label: "LOUNGE" }],
+  decor: [{ x: 36, y: 13, w: 8, h: 4, label: "LOUNGE", kind: "lounge" }],
 };
 
 const SERIES_A: MapSpec = {
   width: 54,
-  height: 18,
+  height: 20,
   officeBounds: { x0: 3, y0: 6, x1: 50, y1: 14 },
   spawn: { x: 7, y: 10 },
   rooms: [
@@ -369,7 +398,7 @@ const SERIES_A: MapSpec = {
       w: 11,
       h: 4,
       label: "HIRE",
-      fillRows: [" $$$$$$$ ", " HHHHHHH "],
+      fillRows: [],
       doorKind: "hire",
       doorChar: "H",
       doorSide: "bottom",
@@ -381,7 +410,7 @@ const SERIES_A: MapSpec = {
       w: 10,
       h: 4,
       label: "VC",
-      fillRows: [" VCVCVC ", " VVVVVV "],
+      fillRows: [],
       doorKind: "vc",
       doorChar: "V",
       doorSide: "bottom",
@@ -393,7 +422,7 @@ const SERIES_A: MapSpec = {
       w: 15,
       h: 4,
       label: "DASHBOARD",
-      fillRows: [" ~~~~~~~~~~~ ", " BBBBBBBBBBB "],
+      fillRows: [],
       doorKind: "dashboard",
       doorChar: "B",
       doorSide: "bottom",
@@ -403,24 +432,24 @@ const SERIES_A: MapSpec = {
       x: 2,
       y: 15,
       w: 10,
-      h: 2,
+      h: 4,
       label: "COFFEE",
       fillRows: [],
       doorKind: "coffee",
       doorChar: "C",
       doorSide: "top",
-      doorOffset: 4,
+      doorOffset: 5,
     },
   ],
   decor: [
-    { x: 44, y: 1, w: 8, h: 4, label: "LAB" },
-    { x: 40, y: 15, w: 10, h: 2, label: "LOUNGE" },
+    { x: 44, y: 1, w: 8, h: 4, label: "LAB", kind: "lab" },
+    { x: 40, y: 15, w: 10, h: 4, label: "LOUNGE", kind: "lounge" },
   ],
 };
 
 const SERIES_B: MapSpec = {
   width: 60,
-  height: 20,
+  height: 22,
   officeBounds: { x0: 4, y0: 6, x1: 55, y1: 15 },
   spawn: { x: 8, y: 10 },
   rooms: [
@@ -430,7 +459,7 @@ const SERIES_B: MapSpec = {
       w: 11,
       h: 4,
       label: "HIRE",
-      fillRows: [" $$$$$$$ ", " HHHHHHH "],
+      fillRows: [],
       doorKind: "hire",
       doorChar: "H",
       doorSide: "bottom",
@@ -442,7 +471,7 @@ const SERIES_B: MapSpec = {
       w: 10,
       h: 4,
       label: "VC",
-      fillRows: [" VCVCVC ", " VVVVVV "],
+      fillRows: [],
       doorKind: "vc",
       doorChar: "V",
       doorSide: "bottom",
@@ -454,7 +483,7 @@ const SERIES_B: MapSpec = {
       w: 15,
       h: 4,
       label: "DASHBOARD",
-      fillRows: [" ~~~~~~~~~~~ ", " BBBBBBBBBBB "],
+      fillRows: [],
       doorKind: "dashboard",
       doorChar: "B",
       doorSide: "bottom",
@@ -464,20 +493,27 @@ const SERIES_B: MapSpec = {
       x: 2,
       y: 17,
       w: 10,
-      h: 2,
+      h: 4,
       label: "COFFEE",
       fillRows: [],
       doorKind: "coffee",
       doorChar: "C",
       doorSide: "top",
-      doorOffset: 4,
+      doorOffset: 5,
     },
   ],
   decor: [
-    { x: 47, y: 1, w: 11, h: 4, label: "LAB" },
-    { x: 14, y: 17, w: 12, h: 2, label: "LOUNGE" },
-    { x: 40, y: 17, w: 15, h: 2, label: "ALL-HANDS" },
+    { x: 47, y: 1, w: 11, h: 4, label: "LAB", kind: "lab" },
+    { x: 14, y: 17, w: 12, h: 4, label: "LOUNGE", kind: "lounge" },
+    { x: 40, y: 17, w: 15, h: 4, label: "ALL-HANDS", kind: "allhands" },
   ],
+};
+
+const SPECS: Record<string, MapSpec> = {
+  "pre-seed": PRE_SEED,
+  seed: SEED,
+  "series-a": SERIES_A,
+  "series-b": SERIES_B,
 };
 
 export const MAPS: Record<string, MapDef> = {
@@ -486,6 +522,19 @@ export const MAPS: Record<string, MapDef> = {
   "series-a": buildMap("series-a", SERIES_A),
   "series-b": buildMap("series-b", SERIES_B),
 };
+
+export function getRoomRects(round: RoundId): RoomRect[] {
+  const spec = SPECS[round] ?? SPECS["series-b"];
+  const rects: RoomRect[] = [];
+  for (const r of spec.rooms) {
+    rects.push({ x: r.x, y: r.y, w: r.w, h: r.h, kind: r.doorKind, label: r.label });
+  }
+  for (const d of spec.decor ?? []) {
+    if (!d.kind) continue;
+    rects.push({ x: d.x, y: d.y, w: d.w, h: d.h, kind: d.kind, label: d.label ?? "" });
+  }
+  return rects;
+}
 
 // Largest map dimensions (used for CSS container sizing so the layout doesn't
 // reflow as the company scales up).

@@ -8,8 +8,36 @@
 
 html,
 body {
-  background: #020617;
   color: #e2e8f0;
+  background-color: #020617;
+  background-image:
+    radial-gradient(ellipse at 50% 35%, rgba(30, 41, 59, 0.55), transparent 60%),
+    radial-gradient(ellipse at 50% 90%, rgba(15, 23, 42, 0.9), transparent 70%);
+  background-attachment: fixed;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.035) 0px,
+    rgba(255, 255, 255, 0.035) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: overlay;
+  opacity: 0.55;
+}
+
+.game-stage {
+  position: relative;
+  --tile-w: 1ch;
+  --tile-h: 1em;
+  isolation: isolate;
 }
 
 .game-grid {
@@ -17,10 +45,27 @@ body {
   line-height: 1;
   letter-spacing: 0;
   user-select: none;
+  position: relative;
+  z-index: 10;
 }
 
 .game-grid > span {
   display: block;
   text-align: center;
-  transition: color 150ms linear;
+  transition: color 150ms linear, filter 200ms linear;
+}
+
+.floor-art {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.toast-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+  overflow: visible;
 }
