@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useActions, useGameStore } from "@/lib/game/store";
 import { useShallow } from "zustand/react/shallow";
 import { valuation } from "@/lib/game/valuation";
+import { teamDistribution } from "@/lib/game/selectors";
 import { WARP_URL } from "@/lib/game/constants";
 import { useDeathSound, useLevelUpSound } from "@/lib/game/sounds";
 
@@ -28,19 +29,29 @@ export function EndScreen() {
   const playLevelUp = useLevelUpSound();
 
   const state = useGameStore(
-    useShallow((s) => ({
-      gameOver: s.gameOver,
-      week: s.week,
-      balance: s.balance,
-      peakHeadcount: s.peakHeadcount,
-      headcount: s.employees.length,
-      revenue: s.revenuePerWeek,
-    }))
+    useShallow((s) => {
+      const dist = teamDistribution(s);
+      return {
+        gameOver: s.gameOver,
+        week: s.week,
+        balance: s.balance,
+        peakHeadcount: s.peakHeadcount,
+        headcount: s.employees.length,
+        revenue: s.revenuePerWeek,
+        coveredCategories: dist.coveredCategories,
+        eng: dist.counts.engineering,
+        design: dist.counts.design,
+        gtm: dist.counts.gtm,
+      };
+    })
   );
 
   const val = valuation({ revenuePerWeek: state.revenue });
   const isUnicorn = state.gameOver === "unicorn";
-  const epi = epitaph(state.week, state.peakHeadcount, state.balance);
+  const teamBreakdown = `${state.eng}/${state.design}/${state.gtm} (eng/design/gtm)`;
+  const epi =
+    epitaph(state.week, state.peakHeadcount, state.balance) +
+    (state.headcount > 0 ? ` Team: ${teamBreakdown}.` : "");
 
   useEffect(() => {
     if (!state.gameOver) return;
@@ -152,12 +163,16 @@ export function EndScreen() {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center">
           <Stat label="Weeks" value={String(state.week)} />
           <Stat label="Peak team" value={String(state.peakHeadcount)} />
           <Stat
             label="Final val"
             value={`$${(val / 1_000_000).toFixed(1)}M`}
+          />
+          <Stat
+            label="Coverage"
+            value={`${state.coveredCategories}/3`}
           />
         </div>
 

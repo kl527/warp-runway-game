@@ -1,7 +1,14 @@
-export const MAP_W = 60;
-export const MAP_H = 20;
 export const TICK_MS = 3000;
 export const STARTING_BALANCE = 500_000;
+// Baseline weekly overhead independent of headcount: rent, ad spend,
+// software & tools, legal/accounting, etc. ~$130k/yr.
+export const BASE_WEEKLY_BURN = 2_500;
+// Signing-bonus market premium per existing hire of the same role.
+// Scaling one function 10-deep gets dramatically more expensive than the first.
+export const MARKET_PREMIUM_PER_COPY = 0.15;
+
+export type RoleCategory = "engineering" | "design" | "gtm";
+export const ROLE_CATEGORIES: RoleCategory[] = ["engineering", "design", "gtm"];
 export const EVENT_PROBABILITY = 0.2;
 export const SHUFFLE_EVERY_TICKS = 2;
 export const MAX_LOG_ENTRIES = 40;

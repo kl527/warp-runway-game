@@ -2,18 +2,32 @@
 
 import { useState } from "react";
 import { ROLES } from "@/lib/game/roles";
-import { LOCATION_MULTIPLIERS, type LocationId } from "@/lib/game/constants";
+import {
+  LOCATION_MULTIPLIERS,
+  MARKET_PREMIUM_PER_COPY,
+  type LocationId,
+} from "@/lib/game/constants";
 import { useActions, useGameStore } from "@/lib/game/store";
+import { nextHireCost, singleHireCost } from "@/lib/game/valuation";
 import { ModalShell } from "./ModalShell";
 import { useHireSound } from "@/lib/game/sounds";
 
 const LOCATIONS: LocationId[] = ["SF", "NYC", "Remote"];
+const MAX_QTY = 20;
 
 export function HireModal() {
   const actions = useActions();
   const balance = useGameStore((s) => s.balance);
+  const employees = useGameStore((s) => s.employees);
   const [location, setLocation] = useState<LocationId>("SF");
+  const [qtyByRole, setQtyByRole] = useState<Record<string, number>>({});
   const playHire = useHireSound();
+
+  const setQty = (roleId: string, q: number) =>
+    setQtyByRole((prev) => ({
+      ...prev,
+      [roleId]: Math.max(1, Math.min(MAX_QTY, q)),
+    }));
 
   return (
     <ModalShell title="HIRE SHOP" wide onClose={actions.closeModal}>
@@ -37,9 +51,13 @@ export function HireModal() {
         {ROLES.map((role) => {
           const mult = LOCATION_MULTIPLIERS[location];
           const weeklySalary = Math.round((role.baseSalary * mult) / 52);
-          const cost = role.signingBonus;
-          const unaffordable = balance < cost;
+          const qty = qtyByRole[role.id] ?? 1;
+          const existing = employees.filter((e) => e.role.id === role.id).length;
+          const nextCost = singleHireCost({ employees }, role.id);
+          const totalCost = nextHireCost({ employees }, role.id, qty);
+          const unaffordable = balance < totalCost;
           const disabled = role.disabled || unaffordable;
+          const hasPremium = existing > 0 || qty > 1;
           return (
             <div
               key={role.id}
@@ -52,6 +70,11 @@ export function HireModal() {
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-bold text-cyan-300">{role.char}</span>
                 <span className="font-bold text-slate-100">{role.name}</span>
+                {!role.disabled && existing > 0 && (
+                  <span className="ml-auto text-[10px] text-slate-500 uppercase tracking-wider">
+                    On team: {existing}
+                  </span>
+                )}
               </div>
               {role.disabled ? (
                 <div>
@@ -76,22 +99,70 @@ export function HireModal() {
                       Weekly: <span className="text-slate-200">${weeklySalary.toLocaleString()}</span>
                     </div>
                     <div>
-                      Signing: <span className="text-slate-200">${role.signingBonus.toLocaleString()}</span>
+                      Next signing:{" "}
+                      <span className="text-slate-200">
+                        ${nextCost.toLocaleString()}
+                      </span>
+                      {existing > 0 && (
+                        <span className="text-amber-300">
+                          {" "}
+                          (base ${role.signingBonus.toLocaleString()})
+                        </span>
+                      )}
                     </div>
                     <div className="text-emerald-300">
                       {formatEffect(role.weeklyEffect)}
                     </div>
+                    {hasPremium && (
+                      <div className="text-[10px] text-amber-400/80">
+                        Market premium: +
+                        {Math.round(MARKET_PREMIUM_PER_COPY * 100)}% per existing {role.name.toLowerCase()}
+                      </div>
+                    )}
                   </div>
-                  <button
-                    onClick={() => {
-                      playHire();
-                      actions.hire(role.id, location);
-                    }}
-                    disabled={disabled}
-                    className="mt-2 w-full py-1 rounded bg-emerald-600 text-slate-950 text-sm font-bold hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {unaffordable ? "CAN'T AFFORD" : `HIRE in ${location}`}
-                  </button>
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="flex items-center rounded border border-slate-700 overflow-hidden">
+                      <button
+                        onClick={() => setQty(role.id, qty - 1)}
+                        disabled={qty <= 1}
+                        aria-label="Decrease quantity"
+                        className="px-2 py-1 text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        min={1}
+                        max={MAX_QTY}
+                        value={qty}
+                        onChange={(e) => {
+                          const parsed = parseInt(e.target.value, 10);
+                          if (!isNaN(parsed)) setQty(role.id, parsed);
+                        }}
+                        className="w-10 bg-slate-950 text-center text-sm tabular-nums outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                      <button
+                        onClick={() => setQty(role.id, qty + 1)}
+                        disabled={qty >= MAX_QTY}
+                        aria-label="Increase quantity"
+                        className="px-2 py-1 text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => {
+                        playHire();
+                        actions.hireMany(role.id, location, qty);
+                      }}
+                      disabled={disabled}
+                      className="flex-1 py-1 rounded bg-emerald-600 text-slate-950 text-sm font-bold hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {unaffordable
+                        ? "CAN'T AFFORD"
+                        : `HIRE ×${qty} · $${totalCost.toLocaleString()}`}
+                    </button>
+                  </div>
                 </>
               )}
             </div>

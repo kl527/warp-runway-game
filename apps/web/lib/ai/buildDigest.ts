@@ -1,4 +1,5 @@
 import type { GameState } from "@/lib/game/state";
+import { teamDistribution } from "@/lib/game/selectors";
 import { runwayWeeks, valuation, weeklyBurn } from "@/lib/game/valuation";
 
 export interface BuildDigest {
@@ -46,6 +47,7 @@ export function buildDigest(state: GameState): BuildDigest {
     .join("\n");
 
   const runwayStr = runway === Infinity ? "infinite (profitable)" : `${runway} weeks`;
+  const dist = teamDistribution(state);
 
   const lines = [
     `Week: ${state.week}`,
@@ -56,6 +58,7 @@ export function buildDigest(state: GameState): BuildDigest {
     `Runway: ${runwayStr}`,
     `Valuation (rev * 52 * 10): $${val.toLocaleString()}`,
     `Team (${state.employees.length}): ${team}`,
+    `Team coverage: engineering=${dist.counts.engineering}, design=${dist.counts.design}, gtm=${dist.counts.gtm} (${dist.coveredCategories}/3 categories)`,
     `Locations: ${locations}`,
     `Morale: ${state.morale}/100`,
     `Cap table: ${capTable}`,

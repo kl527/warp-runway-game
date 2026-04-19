@@ -1,4 +1,4 @@
-import type { LocationId } from "./constants";
+import type { LocationId, RoleCategory } from "./constants";
 
 export type RoundId = "pre-seed" | "seed" | "series-a" | "series-b";
 
@@ -24,6 +24,7 @@ export interface Role {
   baseSalary: number;
   signingBonus: number;
   weeklyEffect: RoleWeeklyEffect;
+  category?: RoleCategory;
   disabled?: boolean;
   disabledTooltip?: string;
   disabledUrl?: string;

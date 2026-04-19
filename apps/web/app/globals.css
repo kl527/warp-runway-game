@@ -14,8 +14,6 @@ body {
 
 .game-grid {
   display: grid;
-  grid-template-columns: repeat(60, 1ch);
-  grid-template-rows: repeat(20, 1em);
   line-height: 1;
   letter-spacing: 0;
   user-select: none;

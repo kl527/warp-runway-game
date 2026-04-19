@@ -9,6 +9,7 @@ export const ROLES: Role[] = [
     baseSalary: 120_000,
     signingBonus: 5_000,
     weeklyEffect: { revenue_delta: 200 },
+    category: "engineering",
   },
   {
     id: "senior_eng",
@@ -17,6 +18,7 @@ export const ROLES: Role[] = [
     baseSalary: 220_000,
     signingBonus: 15_000,
     weeklyEffect: { revenue_delta: 600 },
+    category: "engineering",
   },
   {
     id: "designer",
@@ -25,6 +27,7 @@ export const ROLES: Role[] = [
     baseSalary: 150_000,
     signingBonus: 8_000,
     weeklyEffect: { revenue_multiplier_bonus: 0.05 },
+    category: "design",
   },
   {
     id: "sales",
@@ -33,6 +36,7 @@ export const ROLES: Role[] = [
     baseSalary: 130_000,
     signingBonus: 10_000,
     weeklyEffect: { revenue_delta: 1_000 },
+    category: "gtm",
   },
   {
     id: "marketer",
@@ -41,6 +45,7 @@ export const ROLES: Role[] = [
     baseSalary: 140_000,
     signingBonus: 7_000,
     weeklyEffect: { revenue_delta: 400, morale_bonus: 1 },
+    category: "gtm",
   },
   {
     id: "head_of_ops",

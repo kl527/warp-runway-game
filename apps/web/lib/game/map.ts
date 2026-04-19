@@ -1,4 +1,4 @@
-import { MAP_H, MAP_W } from "./constants";
+import type { RoundId } from "./state";
 
 export type CellKind =
   | "wall"
@@ -9,11 +9,72 @@ export type CellKind =
   | "coffee"
   | "sign";
 
-// Build the 60x20 map row-by-row by writing tokens into a character buffer.
-// Widths are enforced by construction so we cannot ship a short row.
+export type DoorKind = "hire" | "vc" | "dashboard" | "coffee";
 
-function blankRow(): string[] {
-  return new Array(MAP_W).fill(" ");
+export interface BaseCell {
+  x: number;
+  y: number;
+  char: string;
+  kind: CellKind;
+}
+
+export interface MapDef {
+  round: RoundId;
+  width: number;
+  height: number;
+  rows: string[];
+  cells: BaseCell[];
+  cellByKey: Map<string, BaseCell>;
+  doors: Record<DoorKind, { x: number; y: number }>;
+  officeBounds: { x0: number; y0: number; x1: number; y1: number };
+  spawn: { x: number; y: number };
+}
+
+// ---- builder ----
+
+const WALL_CHARS = new Set([
+  "╔",
+  "╗",
+  "╚",
+  "╝",
+  "║",
+  "═",
+  "┌",
+  "┐",
+  "└",
+  "┘",
+  "│",
+  "─",
+]);
+
+interface RoomSpec {
+  // top-left corner of the room's outer rectangle
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  label: string;          // shown on the top border, e.g. "HIRE"
+  fillRows: string[];     // interior rows (without the side walls). Length = h-2
+  doorKind: DoorKind;
+  doorChar: string;       // e.g. "H"
+  doorSide: "top" | "bottom";
+  doorOffset: number;     // x offset within the room for the door char
+}
+
+interface MapSpec {
+  width: number;
+  height: number;
+  officeBounds: { x0: number; y0: number; x1: number; y1: number };
+  spawn: { x: number; y: number };
+  rooms: RoomSpec[];
+  // floating decorative letters (e.g. COFFEE marker "C" placed on open floor)
+  markers?: Array<{ x: number; y: number; char: string; doorKind?: DoorKind }>;
+  // decorative rectangles that are drawn as walls only (no door)
+  decor?: Array<{ x: number; y: number; w: number; h: number; label?: string }>;
+}
+
+function blankRow(width: number): string[] {
+  return new Array(width).fill(" ");
 }
 
 function write(row: string[], x: number, text: string) {
@@ -23,145 +84,431 @@ function write(row: string[], x: number, text: string) {
   }
 }
 
-function borderRow(fill: string, corners: [string, string]): string[] {
-  const row = blankRow();
-  row[0] = corners[0];
-  row[MAP_W - 1] = corners[1];
-  for (let i = 1; i < MAP_W - 1; i++) row[i] = fill;
-  return row;
+function buildMap(round: RoundId, spec: MapSpec): MapDef {
+  const { width, height } = spec;
+  const grid: string[][] = [];
+
+  // Outer border.
+  for (let y = 0; y < height; y++) {
+    const row = blankRow(width);
+    if (y === 0) {
+      row[0] = "╔";
+      row[width - 1] = "╗";
+      for (let x = 1; x < width - 1; x++) row[x] = "═";
+    } else if (y === height - 1) {
+      row[0] = "╚";
+      row[width - 1] = "╝";
+      for (let x = 1; x < width - 1; x++) row[x] = "═";
+    } else {
+      row[0] = "║";
+      row[width - 1] = "║";
+    }
+    grid.push(row);
+  }
+
+  // Paint rooms.
+  const doors: Partial<Record<DoorKind, { x: number; y: number }>> = {};
+  for (const room of spec.rooms) {
+    // Top border with centered label. e.g. "┌─HIRE──┐" across w cols.
+    const innerW = room.w - 2;
+    const label = room.label;
+    const pad = Math.max(0, innerW - label.length);
+    const left = Math.floor(pad / 2);
+    const right = pad - left;
+    const topInner = "─".repeat(left) + label + "─".repeat(right);
+    const topLine = "┌" + topInner + "┐";
+    write(grid[room.y], room.x, topLine);
+
+    // Side walls + interior fill.
+    for (let i = 0; i < room.h - 2; i++) {
+      const rowY = room.y + 1 + i;
+      grid[rowY][room.x] = "│";
+      grid[rowY][room.x + room.w - 1] = "│";
+      const fill = room.fillRows[i] ?? "";
+      // Write fill into the interior. Pad to innerW.
+      const interior = (fill + " ".repeat(Math.max(0, innerW - fill.length))).slice(
+        0,
+        innerW
+      );
+      write(grid[rowY], room.x + 1, interior);
+    }
+
+    // Bottom border (plain).
+    const bottomInner = "─".repeat(innerW);
+    const bottomLine = "└" + bottomInner + "┘";
+    write(grid[room.y + room.h - 1], room.x, bottomLine);
+
+    // Stamp the door char on the chosen side.
+    const doorY = room.doorSide === "top" ? room.y : room.y + room.h - 1;
+    const doorX = room.x + room.doorOffset;
+    grid[doorY][doorX] = room.doorChar;
+    doors[room.doorKind] = { x: doorX, y: doorY };
+  }
+
+  // Decorative rectangles (walls only, no door).
+  for (const d of spec.decor ?? []) {
+    const innerW = d.w - 2;
+    const label = d.label ?? "";
+    const pad = Math.max(0, innerW - label.length);
+    const left = Math.floor(pad / 2);
+    const right = pad - left;
+    const topInner = "─".repeat(left) + label + "─".repeat(right);
+    write(grid[d.y], d.x, "┌" + topInner + "┐");
+    for (let i = 0; i < d.h - 2; i++) {
+      const rowY = d.y + 1 + i;
+      grid[rowY][d.x] = "│";
+      grid[rowY][d.x + d.w - 1] = "│";
+    }
+    write(grid[d.y + d.h - 1], d.x, "└" + "─".repeat(innerW) + "┘");
+  }
+
+  // Paint the office floor with "." so shuffle/hire can find spots.
+  const { x0, y0, x1, y1 } = spec.officeBounds;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if (grid[y][x] === " ") grid[y][x] = ".";
+    }
+  }
+
+  // Floating markers (e.g. coffee cue on open floor).
+  for (const m of spec.markers ?? []) {
+    grid[m.y][m.x] = m.char;
+    if (m.doorKind) doors[m.doorKind] = { x: m.x, y: m.y };
+  }
+
+  // Validate all doors set.
+  const kinds: DoorKind[] = ["hire", "vc", "dashboard", "coffee"];
+  for (const k of kinds) {
+    if (!doors[k]) throw new Error(`map ${round}: door "${k}" was never placed`);
+  }
+
+  const rows = grid.map((r) => r.join(""));
+
+  // Sanity checks.
+  if (rows.length !== height) {
+    throw new Error(`map ${round}: height ${rows.length}, expected ${height}`);
+  }
+  for (let i = 0; i < rows.length; i++) {
+    const len = [...rows[i]].length;
+    if (len !== width) {
+      throw new Error(
+        `map ${round}: row ${i} width ${len}, expected ${width}`
+      );
+    }
+  }
+
+  // Build cells + index.
+  const cells: BaseCell[] = [];
+  const cellByKey = new Map<string, BaseCell>();
+  const resolvedDoors = doors as Record<DoorKind, { x: number; y: number }>;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const ch = grid[y][x];
+      let kind: CellKind;
+      if (resolvedDoors.hire.x === x && resolvedDoors.hire.y === y) kind = "hire";
+      else if (resolvedDoors.vc.x === x && resolvedDoors.vc.y === y) kind = "vc";
+      else if (
+        resolvedDoors.dashboard.x === x &&
+        resolvedDoors.dashboard.y === y
+      )
+        kind = "dashboard";
+      else if (resolvedDoors.coffee.x === x && resolvedDoors.coffee.y === y)
+        kind = "coffee";
+      else if (WALL_CHARS.has(ch)) kind = "wall";
+      else if (ch === "." || ch === " ") kind = "floor";
+      else kind = "sign";
+      const cell: BaseCell = { x, y, char: ch, kind };
+      cells.push(cell);
+      cellByKey.set(`${x},${y}`, cell);
+    }
+  }
+
+  return {
+    round,
+    width,
+    height,
+    rows,
+    cells,
+    cellByKey,
+    doors: resolvedDoors,
+    officeBounds: spec.officeBounds,
+    spawn: spec.spawn,
+  };
 }
 
-function interiorRow(): string[] {
-  const row = blankRow();
-  row[0] = "║";
-  row[MAP_W - 1] = "║";
-  return row;
-}
+// ---- per-round specs ----
+//
+// Each round expands the office and adds new decorative rooms. The four
+// interactive rooms (HIRE, VC, DASHBOARD, COFFEE) are present at every stage
+// because the core game loop needs them.
 
-// Door positions chosen so `kindAt` can resolve each uniquely and the player
-// can approach from the floor row below.
-export const DOORS = {
-  hire: { x: 6, y: 4 },
-  vc: { x: 19, y: 4 },
-  dashboard: { x: 39, y: 4 },
-  coffee: { x: 11, y: 18 },
+const PRE_SEED: MapSpec = {
+  width: 36,
+  height: 14,
+  officeBounds: { x0: 3, y0: 6, x1: 32, y1: 10 },
+  spawn: { x: 6, y: 8 },
+  rooms: [
+    {
+      x: 2,
+      y: 1,
+      w: 9,
+      h: 4,
+      label: "HIRE",
+      fillRows: [" $$$$$ ", " HHHHH "],
+      doorKind: "hire",
+      doorChar: "H",
+      doorSide: "bottom",
+      doorOffset: 4,
+    },
+    {
+      x: 13,
+      y: 1,
+      w: 8,
+      h: 4,
+      label: "VC",
+      fillRows: [" VCVC ", " VVVV "],
+      doorKind: "vc",
+      doorChar: "V",
+      doorSide: "bottom",
+      doorOffset: 3,
+    },
+    {
+      x: 23,
+      y: 1,
+      w: 10,
+      h: 4,
+      label: "DASH",
+      fillRows: [" ~~~~~~ ", " BBBBBB "],
+      doorKind: "dashboard",
+      doorChar: "B",
+      doorSide: "bottom",
+      doorOffset: 4,
+    },
+    {
+      x: 2,
+      y: 11,
+      w: 8,
+      h: 2,
+      label: "COFF",
+      fillRows: [],
+      doorKind: "coffee",
+      doorChar: "C",
+      doorSide: "top",
+      doorOffset: 3,
+    },
+  ],
 };
 
-const top = borderRow("═", ["╔", "╗"]);
-const bottom = borderRow("═", ["╚", "╝"]);
+const SEED: MapSpec = {
+  width: 46,
+  height: 16,
+  officeBounds: { x0: 3, y0: 6, x1: 42, y1: 12 },
+  spawn: { x: 6, y: 9 },
+  rooms: [
+    {
+      x: 2,
+      y: 1,
+      w: 10,
+      h: 4,
+      label: "HIRE",
+      fillRows: [" $$$$$$ ", " HHHHHH "],
+      doorKind: "hire",
+      doorChar: "H",
+      doorSide: "bottom",
+      doorOffset: 4,
+    },
+    {
+      x: 14,
+      y: 1,
+      w: 10,
+      h: 4,
+      label: "VC",
+      fillRows: [" VCVCVC ", " VVVVVV "],
+      doorKind: "vc",
+      doorChar: "V",
+      doorSide: "bottom",
+      doorOffset: 4,
+    },
+    {
+      x: 26,
+      y: 1,
+      w: 14,
+      h: 4,
+      label: "DASHBOARD",
+      fillRows: [" ~~~~~~~~~~ ", " BBBBBBBBBB "],
+      doorKind: "dashboard",
+      doorChar: "B",
+      doorSide: "bottom",
+      doorOffset: 6,
+    },
+    {
+      x: 2,
+      y: 13,
+      w: 9,
+      h: 2,
+      label: "COFF",
+      fillRows: [],
+      doorKind: "coffee",
+      doorChar: "C",
+      doorSide: "top",
+      doorOffset: 4,
+    },
+  ],
+  decor: [{ x: 36, y: 13, w: 8, h: 2, label: "LOUNGE" }],
+};
 
-const row1 = interiorRow();
-write(row1, 2, "┌─HIRE──┐");
-write(row1, 16, "┌──VC──┐");
-write(row1, 33, "┌─DASHBOARD─┐");
-write(row1, 50, "╔═════╗");
+const SERIES_A: MapSpec = {
+  width: 54,
+  height: 18,
+  officeBounds: { x0: 3, y0: 6, x1: 50, y1: 14 },
+  spawn: { x: 7, y: 10 },
+  rooms: [
+    {
+      x: 2,
+      y: 1,
+      w: 11,
+      h: 4,
+      label: "HIRE",
+      fillRows: [" $$$$$$$ ", " HHHHHHH "],
+      doorKind: "hire",
+      doorChar: "H",
+      doorSide: "bottom",
+      doorOffset: 5,
+    },
+    {
+      x: 15,
+      y: 1,
+      w: 10,
+      h: 4,
+      label: "VC",
+      fillRows: [" VCVCVC ", " VVVVVV "],
+      doorKind: "vc",
+      doorChar: "V",
+      doorSide: "bottom",
+      doorOffset: 4,
+    },
+    {
+      x: 27,
+      y: 1,
+      w: 15,
+      h: 4,
+      label: "DASHBOARD",
+      fillRows: [" ~~~~~~~~~~~ ", " BBBBBBBBBBB "],
+      doorKind: "dashboard",
+      doorChar: "B",
+      doorSide: "bottom",
+      doorOffset: 7,
+    },
+    {
+      x: 2,
+      y: 15,
+      w: 10,
+      h: 2,
+      label: "COFFEE",
+      fillRows: [],
+      doorKind: "coffee",
+      doorChar: "C",
+      doorSide: "top",
+      doorOffset: 4,
+    },
+  ],
+  decor: [
+    { x: 44, y: 1, w: 8, h: 4, label: "LAB" },
+    { x: 40, y: 15, w: 10, h: 2, label: "LOUNGE" },
+  ],
+};
 
-const row2 = interiorRow();
-write(row2, 2, "│ $$$$$ │");
-write(row2, 16, "│ VCVC │");
-write(row2, 33, "│ ~~~~~~~~~ │");
-write(row2, 50, "║ BAR ║");
+const SERIES_B: MapSpec = {
+  width: 60,
+  height: 20,
+  officeBounds: { x0: 4, y0: 6, x1: 55, y1: 15 },
+  spawn: { x: 8, y: 10 },
+  rooms: [
+    {
+      x: 2,
+      y: 1,
+      w: 11,
+      h: 4,
+      label: "HIRE",
+      fillRows: [" $$$$$$$ ", " HHHHHHH "],
+      doorKind: "hire",
+      doorChar: "H",
+      doorSide: "bottom",
+      doorOffset: 5,
+    },
+    {
+      x: 16,
+      y: 1,
+      w: 10,
+      h: 4,
+      label: "VC",
+      fillRows: [" VCVCVC ", " VVVVVV "],
+      doorKind: "vc",
+      doorChar: "V",
+      doorSide: "bottom",
+      doorOffset: 4,
+    },
+    {
+      x: 29,
+      y: 1,
+      w: 15,
+      h: 4,
+      label: "DASHBOARD",
+      fillRows: [" ~~~~~~~~~~~ ", " BBBBBBBBBBB "],
+      doorKind: "dashboard",
+      doorChar: "B",
+      doorSide: "bottom",
+      doorOffset: 7,
+    },
+    {
+      x: 2,
+      y: 17,
+      w: 10,
+      h: 2,
+      label: "COFFEE",
+      fillRows: [],
+      doorKind: "coffee",
+      doorChar: "C",
+      doorSide: "top",
+      doorOffset: 4,
+    },
+  ],
+  decor: [
+    { x: 47, y: 1, w: 11, h: 4, label: "LAB" },
+    { x: 14, y: 17, w: 12, h: 2, label: "LOUNGE" },
+    { x: 40, y: 17, w: 15, h: 2, label: "ALL-HANDS" },
+  ],
+};
 
-const row3 = interiorRow();
-write(row3, 2, "│ HHHHH │");
-write(row3, 16, "│ VVVV │");
-write(row3, 33, "│ BBBBBBBBB │");
-write(row3, 50, "╚═════╝");
+export const MAPS: Record<RoundId, MapDef> = {
+  "pre-seed": buildMap("pre-seed", PRE_SEED),
+  seed: buildMap("seed", SEED),
+  "series-a": buildMap("series-a", SERIES_A),
+  "series-b": buildMap("series-b", SERIES_B),
+};
 
-const row4 = interiorRow();
-write(row4, 2, "└───H───┘");
-write(row4, 16, "└──V───┘");
-write(row4, 33, "└─────B─────┘");
-// put the actual door chars at the defined DOORS coordinates
-row4[DOORS.hire.x] = "H";
-row4[DOORS.vc.x] = "V";
-row4[DOORS.dashboard.x] = "B";
+// Largest map dimensions (used for CSS container sizing so the layout doesn't
+// reflow as the company scales up).
+export const MAX_MAP_W = Math.max(...Object.values(MAPS).map((m) => m.width));
+export const MAX_MAP_H = Math.max(...Object.values(MAPS).map((m) => m.height));
 
-const row5 = interiorRow();
-
-const OFFICE_X0 = 4;
-const OFFICE_X1 = 51;
-const OFFICE_Y0 = 6;
-const OFFICE_Y1 = 15;
-
-const officeRows: string[][] = [];
-for (let y = OFFICE_Y0; y <= OFFICE_Y1; y++) {
-  const row = interiorRow();
-  for (let x = OFFICE_X0; x <= OFFICE_X1; x++) {
-    row[x] = ".";
-  }
-  officeRows.push(row);
+export function getMap(round: RoundId): MapDef {
+  return MAPS[round];
 }
 
-const row16 = interiorRow();
-
-const row17 = interiorRow();
-write(row17, 2, "┌──────┐");
-
-const row18 = interiorRow();
-write(row18, 2, "│ COFF │");
-row18[DOORS.coffee.x] = "C";
-
-export const MAP: string[] = [
-  top.join(""),
-  row1.join(""),
-  row2.join(""),
-  row3.join(""),
-  row4.join(""),
-  row5.join(""),
-  ...officeRows.map((r) => r.join("")),
-  row16.join(""),
-  row17.join(""),
-  row18.join(""),
-  bottom.join(""),
-];
-
-if (MAP.length !== MAP_H) {
-  throw new Error(`MAP height expected ${MAP_H}, got ${MAP.length}`);
-}
-for (let i = 0; i < MAP.length; i++) {
-  const len = [...MAP[i]].length;
-  if (len !== MAP_W) {
-    throw new Error(`MAP row ${i} expected width ${MAP_W}, got ${len}`);
-  }
+export function charAt(map: MapDef, x: number, y: number): string {
+  if (y < 0 || y >= map.height || x < 0 || x >= map.width) return " ";
+  const cell = map.cellByKey.get(`${x},${y}`);
+  return cell?.char ?? " ";
 }
 
-const WALL_CHARS = new Set([
-  "╔",
-  "╗",
-  "╚",
-  "╝",
-  "║",
-  "═",
-  "╧",
-  "┌",
-  "┐",
-  "└",
-  "┘",
-  "│",
-  "─",
-]);
-
-export function charAt(x: number, y: number): string {
-  const row = MAP[y];
-  if (!row) return " ";
-  return [...row][x] ?? " ";
+export function kindAt(map: MapDef, x: number, y: number): CellKind {
+  if (y < 0 || y >= map.height || x < 0 || x >= map.width) return "wall";
+  return map.cellByKey.get(`${x},${y}`)?.kind ?? "wall";
 }
 
-export function kindAt(x: number, y: number): CellKind {
-  if (DOORS.hire.x === x && DOORS.hire.y === y) return "hire";
-  if (DOORS.vc.x === x && DOORS.vc.y === y) return "vc";
-  if (DOORS.dashboard.x === x && DOORS.dashboard.y === y) return "dashboard";
-  if (DOORS.coffee.x === x && DOORS.coffee.y === y) return "coffee";
-  const ch = charAt(x, y);
-  if (WALL_CHARS.has(ch)) return "wall";
-  if (ch === "." || ch === " ") return "floor";
-  // Decorative letters inside rooms.
-  return "sign";
-}
-
-export function isWalkable(x: number, y: number): boolean {
-  const k = kindAt(x, y);
+export function isWalkable(map: MapDef, x: number, y: number): boolean {
+  const k = kindAt(map, x, y);
   return (
     k === "floor" || k === "hire" || k === "vc" || k === "dashboard" || k === "coffee"
   );
@@ -173,43 +520,11 @@ export function isBuildingDoor(
   return k === "hire" || k === "vc" || k === "dashboard" || k === "coffee";
 }
 
-export const OFFICE_BOUNDS = {
-  x0: OFFICE_X0,
-  y0: OFFICE_Y0,
-  x1: OFFICE_X1,
-  y1: OFFICE_Y1,
-};
-
-export function inOffice(x: number, y: number): boolean {
-  return (
-    x >= OFFICE_BOUNDS.x0 &&
-    x <= OFFICE_BOUNDS.x1 &&
-    y >= OFFICE_BOUNDS.y0 &&
-    y <= OFFICE_BOUNDS.y1
-  );
+export function inOffice(map: MapDef, x: number, y: number): boolean {
+  const b = map.officeBounds;
+  return x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1;
 }
-
-export interface BaseCell {
-  x: number;
-  y: number;
-  char: string;
-  kind: CellKind;
-}
-
-export const BASE_CELLS: BaseCell[] = (() => {
-  const out: BaseCell[] = [];
-  for (let y = 0; y < MAP_H; y++) {
-    for (let x = 0; x < MAP_W; x++) {
-      const ch = charAt(x, y);
-      out.push({ x, y, char: ch, kind: kindAt(x, y) });
-    }
-  }
-  return out;
-})();
 
 export function cellKey(x: number, y: number): string {
   return `${x},${y}`;
 }
-
-// Default player spawn: center-ish of office floor.
-export const SPAWN = { x: 8, y: 10 };

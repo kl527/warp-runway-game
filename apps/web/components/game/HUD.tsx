@@ -53,6 +53,17 @@ export function HUD() {
         tone={hud.runway < 8 ? "bad" : "neutral"}
       />
       <Stat label="MORALE" value={`${hud.morale}%`} />
+      <Stat
+        label="TEAM ⚖"
+        value={`${hud.coveredCategories}/3`}
+        tone={
+          hud.coveredCategories === 3
+            ? "good"
+            : hud.coveredCategories < 2
+              ? "bad"
+              : "neutral"
+        }
+      />
       <Stat label="ROUND" value={hud.round} />
       <Stat label="OWN" value={`${Math.round(hud.founders * 100)}%`} />
       <Stat label="VAL" value={fmtMoney(hud.valuation)} />

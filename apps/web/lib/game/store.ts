@@ -4,6 +4,7 @@ import {
   closeModal as pureCloseModal,
   fundraise as pureFundraise,
   hire as pureHire,
+  hireMany as pureHireMany,
   initialState,
   interact as pureInteract,
   move as pureMove,
@@ -19,6 +20,7 @@ export interface GameActions {
   move: (dx: number, dy: number) => void;
   interact: () => void;
   hire: (roleId: string, location: LocationId) => void;
+  hireMany: (roleId: string, location: LocationId, qty: number) => void;
   fundraise: (idx: number) => void;
   tick: () => void;
   togglePause: () => void;
@@ -37,6 +39,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     move: (dx, dy) => set((s) => pureMove(s, dx, dy)),
     interact: () => set((s) => pureInteract(s)),
     hire: (roleId, location) => set((s) => pureHire(s, roleId, location)),
+    hireMany: (roleId, location, qty) =>
+      set((s) => pureHireMany(s, roleId, location, qty)),
     fundraise: (idx) => set((s) => pureFundraise(s, idx)),
     tick: () => set((s) => pureTick(s)),
     togglePause: () => set((s) => pureTogglePause(s)),

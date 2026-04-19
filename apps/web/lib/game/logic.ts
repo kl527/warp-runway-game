@@ -10,11 +10,13 @@ import {
   STARTING_BALANCE,
 } from "./constants";
 import type { LocationId } from "./constants";
-import { BASE_CELLS, cellKey, inOffice, isWalkable, kindAt, OFFICE_BOUNDS, SPAWN } from "./map";
+import { cellKey, getMap, inOffice, isWalkable, kindAt } from "./map";
 import { makeName } from "./names";
 import { roleById, ROLES } from "./roles";
 import type { ChoiceOption, Employee, GameState, LogEntry, Role, RoundId } from "./state";
-import { runwayWeeks, valuation, weeklyBurn } from "./valuation";
+import { nextHireCost, runwayWeeks, valuation, weeklyBurn } from "./valuation";
+import { teamDistribution } from "./selectors";
+import { ROLE_CATEGORIES } from "./constants";
 import { EVENTS, rollEvent, type GameEventDef } from "./events";
 
 // Deterministic-ish RNG seeded by rngSeed. Mulberry32.
@@ -30,6 +32,7 @@ function makeRng(seed: number): () => number {
 }
 
 export function initialState(): GameState {
+  const startMap = getMap("pre-seed");
   return {
     week: 0,
     balance: STARTING_BALANCE,
@@ -50,7 +53,7 @@ export function initialState(): GameState {
     paused: false,
     speed: 1,
     gameOver: null,
-    position: { ...SPAWN },
+    position: { ...startMap.spawn },
     modal: null,
     peakHeadcount: 0,
     tickCount: 0,
@@ -100,9 +103,10 @@ function recomputeMorale(s: GameState): void {
 
 export function move(s: GameState, dx: number, dy: number): GameState {
   if (s.gameOver || s.modal) return s;
+  const map = getMap(s.round);
   const nx = s.position.x + dx;
   const ny = s.position.y + dy;
-  if (!isWalkable(nx, ny)) return s;
+  if (!isWalkable(map, nx, ny)) return s;
   return { ...s, position: { x: nx, y: ny } };
 }
 
@@ -114,6 +118,7 @@ type InteractResult =
   | { kind: "coffee" };
 
 function adjacentBuilding(s: GameState): InteractResult {
+  const map = getMap(s.round);
   const { x, y } = s.position;
   const candidates = [
     [x, y],
@@ -123,7 +128,7 @@ function adjacentBuilding(s: GameState): InteractResult {
     [x + 1, y],
   ];
   for (const [cx, cy] of candidates) {
-    const k = kindAt(cx, cy);
+    const k = kindAt(map, cx, cy);
     if (k === "hire") return { kind: "modal", modal: { kind: "hire" } };
     if (k === "vc") return { kind: "modal", modal: { kind: "fundraise" } };
     if (k === "dashboard") return { kind: "modal", modal: { kind: "dashboard" } };
@@ -160,57 +165,76 @@ export function interact(s: GameState): GameState {
 // ---- hire ----
 
 export function hire(s: GameState, roleId: string, location: LocationId): GameState {
-  if (s.gameOver) return s;
+  return hireMany(s, roleId, location, 1);
+}
+
+export function hireMany(
+  s: GameState,
+  roleId: string,
+  location: LocationId,
+  qty: number
+): GameState {
+  if (s.gameOver || qty <= 0) return s;
   const role = roleById(roleId);
   if (!role || role.disabled) return s;
-  const rng = makeRng(s.rngSeed + s.employees.length * 7919);
-  const id = `${roleId}-${s.week}-${s.employees.length}-${Math.floor(rng() * 1e9)}`;
-  const spot = findOfficeSpot(s, rng);
-  const next: GameState = {
+  const totalCost = nextHireCost(s, roleId, qty);
+  if (s.balance < totalCost) return s;
+
+  const map = getMap(s.round);
+  let next: GameState = {
     ...s,
-    balance: s.balance - role.signingBonus,
-    employees: [
-      ...s.employees,
-      {
-        id,
-        role,
-        name: makeName(rng),
-        location,
-        hiredWeek: s.week,
-        morale: 90,
-        x: spot.x,
-        y: spot.y,
-      },
-    ],
-    rngSeed: (s.rngSeed + 1) >>> 0,
+    balance: s.balance - totalCost,
+    employees: s.employees.slice(),
+    eventLog: s.eventLog.slice(),
+    history: s.history.slice(),
     modal: null,
     paused: false,
   };
+
+  for (let i = 0; i < qty; i++) {
+    const rng = makeRng(next.rngSeed + next.employees.length * 7919);
+    const id = `${roleId}-${next.week}-${next.employees.length}-${Math.floor(rng() * 1e9)}`;
+    const spot = findOfficeSpot(map, next, rng);
+    next.employees.push({
+      id,
+      role,
+      name: makeName(rng),
+      location,
+      hiredWeek: next.week,
+      morale: 90,
+      x: spot.x,
+      y: spot.y,
+    });
+    next.rngSeed = (next.rngSeed + 1) >>> 0;
+  }
+
   next.peakHeadcount = Math.max(next.peakHeadcount, next.employees.length);
   recomputeRevenue(next);
   recomputeMorale(next);
+  const qtyLabel = qty > 1 ? `${qty}× ` : "";
   pushLog(next, {
     week: s.week,
-    message: `Hired ${role.name} (${location}). Signing bonus: $${role.signingBonus.toLocaleString()}.`,
+    message: `Hired ${qtyLabel}${role.name} (${location}). Signing total: $${totalCost.toLocaleString()}.`,
     tone: "good",
   });
   return next;
 }
 
-function findOfficeSpot(s: GameState, rng: () => number): { x: number; y: number } {
+function findOfficeSpot(
+  map: ReturnType<typeof getMap>,
+  s: GameState,
+  rng: () => number
+): { x: number; y: number } {
   const occupied = new Set(s.employees.map((e) => cellKey(e.x, e.y)));
+  const b = map.officeBounds;
   for (let tries = 0; tries < 200; tries++) {
-    const x =
-      OFFICE_BOUNDS.x0 +
-      Math.floor(rng() * (OFFICE_BOUNDS.x1 - OFFICE_BOUNDS.x0 + 1));
-    const y =
-      OFFICE_BOUNDS.y0 +
-      Math.floor(rng() * (OFFICE_BOUNDS.y1 - OFFICE_BOUNDS.y0 + 1));
-    if (!isWalkable(x, y)) continue;
+    const x = b.x0 + Math.floor(rng() * (b.x1 - b.x0 + 1));
+    const y = b.y0 + Math.floor(rng() * (b.y1 - b.y0 + 1));
+    if (!isWalkable(map, x, y)) continue;
     if (occupied.has(cellKey(x, y))) continue;
     return { x, y };
   }
-  return { x: OFFICE_BOUNDS.x0, y: OFFICE_BOUNDS.y0 };
+  return { x: b.x0, y: b.y0 };
 }
 
 // ---- fundraise ----
@@ -239,6 +263,20 @@ export function fundraise(s: GameState, idx: number): GameState {
   if (!def) return s;
   const gate = canFundraise(s, idx);
   if (!gate.ok) return s;
+  const nextRound: RoundId = def.roundAfter;
+  const newMap = getMap(nextRound);
+
+  // Rehome anyone landing on a now-invalid tile (room walls shift between maps).
+  const rng = makeRng(s.rngSeed + s.week * 2111);
+  const relocatedEmployees = s.employees.map((e) => {
+    if (isWalkable(newMap, e.x, e.y) && inOffice(newMap, e.x, e.y)) return e;
+    const spot = findOfficeSpot(newMap, { ...s, employees: [] }, rng);
+    return { ...e, x: spot.x, y: spot.y };
+  });
+  const playerPos = isWalkable(newMap, s.position.x, s.position.y)
+    ? s.position
+    : { ...newMap.spawn };
+
   const next: GameState = {
     ...s,
     balance: s.balance + def.check,
@@ -249,13 +287,15 @@ export function fundraise(s: GameState, idx: number): GameState {
         { round: def.label, pct: def.dilution },
       ],
     },
-    round: def.roundAfter,
+    round: nextRound,
+    employees: relocatedEmployees,
+    position: playerPos,
     modal: null,
     paused: false,
   };
   pushLog(next, {
     week: s.week,
-    message: `Closed ${def.label}: $${(def.check / 1_000_000).toFixed(0)}M at ${Math.round(def.dilution * 100)}% dilution.`,
+    message: `Closed ${def.label}: $${(def.check / 1_000_000).toFixed(0)}M at ${Math.round(def.dilution * 100)}% dilution. Office expanded.`,
     tone: "good",
   });
   return next;
@@ -293,7 +333,7 @@ export function tick(s: GameState): GameState {
   // Employee shuffle.
   if (next.tickCount % SHUFFLE_EVERY_TICKS === 0) {
     const rng = makeRng(next.rngSeed + next.tickCount);
-    next.employees = shuffleEmployees(next.employees, rng);
+    next.employees = shuffleEmployees(getMap(next.round), next.employees, rng);
     next.rngSeed = (next.rngSeed + 17) >>> 0;
   }
 
@@ -325,18 +365,29 @@ export function tick(s: GameState): GameState {
       tone: "bad",
     });
   } else if (valuation(next) >= UNICORN_VALUATION) {
-    next.gameOver = "unicorn";
-    pushLog(next, {
-      week: next.week,
-      message: "Unicorn! You hit a $1B valuation.",
-      tone: "good",
-    });
+    const dist = teamDistribution(next);
+    if (dist.coveredCategories === ROLE_CATEGORIES.length) {
+      next.gameOver = "unicorn";
+      pushLog(next, {
+        week: next.week,
+        message: "Unicorn! You hit a $1B valuation with a well-distributed team.",
+        tone: "good",
+      });
+    } else if (next.week % 10 === 0) {
+      const missing = ROLE_CATEGORIES.filter((c) => dist.counts[c] === 0).join(", ");
+      pushLog(next, {
+        week: next.week,
+        message: `$1B valuation, but not a real team yet. Missing: ${missing}.`,
+        tone: "neutral",
+      });
+    }
   }
 
   return next;
 }
 
 export function shuffleEmployees(
+  map: ReturnType<typeof getMap>,
   employees: Employee[],
   rng: () => number
 ): Employee[] {
@@ -357,8 +408,8 @@ export function shuffleEmployees(
     for (const [dx, dy] of moves) {
       const nx = e.x + dx;
       const ny = e.y + dy;
-      if (!inOffice(nx, ny)) continue;
-      if (!isWalkable(nx, ny)) continue;
+      if (!inOffice(map, nx, ny)) continue;
+      if (!isWalkable(map, nx, ny)) continue;
       const key = cellKey(nx, ny);
       if (key !== cellKey(e.x, e.y) && occupied.has(key)) continue;
       occupied.delete(cellKey(e.x, e.y));
