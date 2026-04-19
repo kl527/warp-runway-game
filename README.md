@@ -1,6 +1,6 @@
 # Warp Runway: The Game
 
-A keyboard-driven ASCII startup simulator. Survive the burn, hit the IPO, or die trying.
+A keyboard-driven ASCII startup simulator. Raise, hire, and grow your company from a garage into a unicorn — or burn out trying.
 
 **Play it:** https://warp-runway-game-web.leed4219.workers.dev
 
@@ -13,9 +13,11 @@ A keyboard-driven ASCII startup simulator. Survive the burn, hit the IPO, or die
 - **Tailwind CSS** for styling
 - **Zustand** for game state
 - **Framer Motion** for modal transitions
-- **canvas-confetti** for the IPO celebration
+- **canvas-confetti** for the unicorn celebration
 - **use-sound** (Howler) for game audio
-- **Satori** for rendered OG share cards
+- **Satori** + **@resvg/resvg-wasm** for rendered OG share cards
+- **Vercel AI SDK** (`ai`) + **Workers AI** (`workers-ai-provider`) for the VC pitch verdict, chat, critique, and pitch-question endpoints
+- **Zod** for AI request/response schemas
 - Deployed on **Cloudflare Workers** via **OpenNext**
 
 ### Backend (`apps/api/`)
