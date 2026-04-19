@@ -1,13 +1,37 @@
 import {
+  BASE_CHURN_RATE,
+  BOARD_CONFIDENCE_DECAY_FLAT_GROWTH,
+  BOARD_CONFIDENCE_DECAY_LOW_RUNWAY,
+  BOARD_CONFIDENCE_GROWTH_GRACE_WEEKS,
+  BOARD_CONFIDENCE_LOW_RUNWAY_WEEKS,
+  BOARD_CONFIDENCE_RECOVERY,
+  BOARD_CONFIDENCE_START,
+  BOARD_CONFIDENCE_WARN_AT,
+  BOARD_CONFIDENCE_WARN_INTERVAL,
+  CHURN_DESIGN_PROTECTION,
+  CHURN_DESIGN_PROTECTION_MAX,
+  CHURN_ENG_PROTECTION,
+  CHURN_ENG_PROTECTION_MAX,
+  CHURN_LOW_MORALE_PER_POINT,
+  CHURN_LOW_MORALE_THRESHOLD,
+  CHURN_SCALE_PER_K_REV,
   COFFEE_MORALE_BOOST,
   easterEggGiftForRound,
   EASTER_EGG_LIFETIME_WEEKS,
   EASTER_EGG_MAX_ON_BOARD,
   EASTER_EGG_SPAWN_CHANCE,
   EVENT_PROBABILITY,
+  FUNDRAISE_BASE_ODDS_BY_ROUND,
+  FUNDRAISE_EXPECTED_MULTIPLE,
+  FUNDRAISE_FAIL_CONFIDENCE_HIT,
+  FUNDRAISE_FAIL_MORALE_HIT,
+  FUNDRAISE_LOCKOUT_WEEKS,
+  FUNDRAISE_MAX_ODDS,
+  FUNDRAISE_MIN_ODDS,
   FUNDRAISE_ROUNDS,
   UNICORN_VALUATION,
   LOCATION_MULTIPLIERS,
+  MAX_CHURN_RATE,
   MAX_LOG_ENTRIES,
   MORALE_BASELINE,
   QUIT_DEADLINE_TICKS,
@@ -53,6 +77,7 @@ export function initialState(): GameState {
     startingBalance: STARTING_BALANCE,
     employees: [],
     revenuePerWeek: 0,
+    churnRate: 0,
     morale: 100,
     lastInteractionWeek: 0,
     capTable: { founders: 1.0, investors: [] },
@@ -81,6 +106,10 @@ export function initialState(): GameState {
     ],
     rngSeed: Math.floor(Math.random() * 2 ** 31),
     easterEggs: [],
+    boardConfidence: BOARD_CONFIDENCE_START,
+    revenueAtLastRound: 0,
+    weekOfLastRound: 0,
+    fundraiseLockoutUntilWeek: 0,
   };
 }
 
@@ -89,6 +118,37 @@ function pushLog(s: GameState, entry: LogEntry): void {
   if (s.eventLog.length > MAX_LOG_ENTRIES) {
     s.eventLog.splice(0, s.eventLog.length - MAX_LOG_ENTRIES);
   }
+}
+
+// Fraction of gross MRR lost each tick to customer attrition. Computed from
+// composition, morale, and revenue scale — not state.churnRate — so it's pure.
+function computeChurnRate(
+  s: Pick<GameState, "employees" | "morale">,
+  grossRevenue: number,
+): number {
+  if (s.employees.length === 0 || grossRevenue <= 0) return 0;
+  let eng = 0;
+  let design = 0;
+  for (const e of s.employees) {
+    if (e.role.category === "engineering") eng++;
+    else if (e.role.category === "design") design++;
+  }
+  const engProtection = Math.min(
+    CHURN_ENG_PROTECTION_MAX,
+    eng * CHURN_ENG_PROTECTION,
+  );
+  const designProtection = Math.min(
+    CHURN_DESIGN_PROTECTION_MAX,
+    design * CHURN_DESIGN_PROTECTION,
+  );
+  const scalePenalty = (grossRevenue / 1000) * CHURN_SCALE_PER_K_REV;
+  const moraleStress =
+    s.morale < CHURN_LOW_MORALE_THRESHOLD
+      ? (CHURN_LOW_MORALE_THRESHOLD - s.morale) * CHURN_LOW_MORALE_PER_POINT
+      : 0;
+  const raw =
+    BASE_CHURN_RATE + scalePenalty + moraleStress - engProtection - designProtection;
+  return Math.max(0, Math.min(MAX_CHURN_RATE, raw));
 }
 
 function recomputeRevenue(s: GameState): void {
@@ -108,7 +168,10 @@ function recomputeRevenue(s: GameState): void {
   // buff doesn't become self-referential once it kicks in.
   const burn = weeklyBurn(s);
   const syn = computeSynergies(s, { revenue: preSynergy, burn });
-  s.revenuePerWeek = Math.max(0, Math.round(preSynergy * syn.revenueMultiplier));
+  const gross = preSynergy * syn.revenueMultiplier;
+  const churn = computeChurnRate(s, gross);
+  s.churnRate = churn;
+  s.revenuePerWeek = Math.max(0, Math.round(gross * (1 - churn)));
 }
 
 function recomputeMorale(s: GameState): void {
@@ -416,6 +479,10 @@ export function canFundraise(s: GameState, idx: number): { ok: boolean; reason?:
   const completed = completedRoundIdx(s);
   if (idx <= completed) return { ok: false, reason: "Already raised" };
   if (idx > completed + 1) return { ok: false, reason: "Close prior round first" };
+  if (s.week < s.fundraiseLockoutUntilWeek) {
+    const w = s.fundraiseLockoutUntilWeek - s.week;
+    return { ok: false, reason: `VCs passed — retry in ${w}w` };
+  }
   if (s.employees.length < def.minEmployees) {
     return { ok: false, reason: `Need ${def.minEmployees} employees` };
   }
@@ -425,19 +492,102 @@ export function canFundraise(s: GameState, idx: number): { ok: boolean; reason?:
   return { ok: true };
 }
 
-export function fundraise(s: GameState, idx: number): GameState {
+// Odds the round actually closes. Investors weigh growth-since-last-round,
+// runway cushion, and how far past the gate you are. Exposed for the UI so
+// players see the number before they pull the trigger.
+export function fundraiseOdds(s: GameState, idx: number): number {
+  const def = FUNDRAISE_ROUNDS[idx];
+  if (!def) return 0;
+  const roundBase =
+    FUNDRAISE_BASE_ODDS_BY_ROUND[Math.min(idx, FUNDRAISE_BASE_ODDS_BY_ROUND.length - 1)];
+
+  // Growth since last raise (or since founding for seed).
+  const revBefore = Math.max(200, s.revenueAtLastRound);
+  const growthMultiple = Math.max(0, s.revenuePerWeek) / revBefore;
+  // Linear credit up to the expected multiple, capped.
+  const growthFactor = Math.min(1, growthMultiple / FUNDRAISE_EXPECTED_MULTIPLE);
+
+  // Runway: investors prefer founders who aren't desperate.
+  const burn = weeklyBurn(s);
+  const runway = runwayWeeks(s, burn);
+  const runwayFactor = runway === Infinity ? 1 : Math.min(1, runway / 24);
+
+  // Headroom past the gate signals real traction, not a squeaker.
+  const headroomFactor = Math.min(1, s.employees.length / (def.minEmployees * 1.3));
+  const revenueHeadroom = Math.min(
+    1,
+    def.minRevenue > 0 ? s.revenuePerWeek / (def.minRevenue * 1.4) : 1,
+  );
+
+  // Weighted mix — growth matters most.
+  const mix =
+    0.15 + 0.4 * growthFactor + 0.2 * runwayFactor + 0.15 * headroomFactor + 0.1 * revenueHeadroom;
+  const odds = roundBase * mix * 1.1;
+  return Math.max(FUNDRAISE_MIN_ODDS, Math.min(FUNDRAISE_MAX_ODDS, odds));
+}
+
+export interface FundraiseOpts {
+  // "auto" = roll the probabilistic odds (default, used by seed)
+  // "success" = AI pitch approved, close deterministically
+  // "fail" = AI pitch rejected, apply failure state
+  outcome?: "auto" | "success" | "fail";
+}
+
+export function fundraise(
+  s: GameState,
+  idx: number,
+  opts: FundraiseOpts = {},
+): GameState {
   const def = FUNDRAISE_ROUNDS[idx];
   if (!def) return s;
   const gate = canFundraise(s, idx);
   if (!gate.ok) return s;
+
+  const outcome = opts.outcome ?? "auto";
+  let failed: boolean;
+  if (outcome === "success") failed = false;
+  else if (outcome === "fail") failed = true;
+  else {
+    // Roll the round. The RNG seed advances so replaying feels varied.
+    const rng = makeRng(s.rngSeed + s.week * 7477 + idx * 101);
+    const odds = fundraiseOdds(s, idx);
+    failed = rng() > odds;
+  }
+
+  if (failed) {
+    // Raise failed. Lockout, morale hit, confidence crater. No cap-table change.
+    const morale = Math.max(0, FUNDRAISE_FAIL_MORALE_HIT);
+    const next: GameState = {
+      ...s,
+      employees: s.employees.map((e) => ({
+        ...e,
+        morale: Math.max(0, e.morale - morale),
+      })),
+      fundraiseLockoutUntilWeek: s.week + FUNDRAISE_LOCKOUT_WEEKS,
+      boardConfidence: Math.max(0, s.boardConfidence - FUNDRAISE_FAIL_CONFIDENCE_HIT),
+      modal: null,
+      paused: false,
+      eventLog: s.eventLog.slice(),
+      rngSeed: (s.rngSeed + 7477) >>> 0,
+    };
+    recomputeMorale(next);
+    recomputeRevenue(next);
+    pushLog(next, {
+      week: s.week,
+      message: `${def.label} fell through. VCs wanted more traction. Morale −${morale}, locked out for ${FUNDRAISE_LOCKOUT_WEEKS}w.`,
+      tone: "bad",
+    });
+    return next;
+  }
+
   const nextRound: RoundId = def.roundAfter;
   const newMap = getMap(nextRound);
 
   // Rehome anyone landing on a now-invalid tile (room walls shift between maps).
-  const rng = makeRng(s.rngSeed + s.week * 2111);
+  const relocRng = makeRng(s.rngSeed + s.week * 2111);
   const relocatedEmployees = s.employees.map((e) => {
     if (isWalkable(newMap, e.x, e.y) && inOffice(newMap, e.x, e.y)) return e;
-    const spot = findOfficeSpot(newMap, { ...s, employees: [] }, rng);
+    const spot = findOfficeSpot(newMap, { ...s, employees: [] }, relocRng);
     return { ...e, x: spot.x, y: spot.y };
   });
   const playerPos = isWalkable(newMap, s.position.x, s.position.y)
@@ -460,6 +610,11 @@ export function fundraise(s: GameState, idx: number): GameState {
     modal: null,
     paused: false,
     easterEggs: [],
+    // Reset the growth clock and top up board confidence — honeymoon period.
+    revenueAtLastRound: Math.max(s.revenuePerWeek, 1),
+    weekOfLastRound: s.week,
+    boardConfidence: Math.min(100, s.boardConfidence + 25),
+    fundraiseLockoutUntilWeek: 0,
   };
   pushLog(next, {
     week: s.week,
@@ -583,6 +738,48 @@ export function tick(s: GameState): GameState {
   // Easter egg spawn + despawn (Warp presents).
   next = tickEasterEggs(next, rng);
 
+  // Board confidence — only meaningful post-seed. Decays when runway gets
+  // thin or revenue has flatlined well past the last round's honeymoon.
+  if (next.round !== "pre-seed") {
+    const runway = runwayWeeks(next, weeklyBurnAmt);
+    const lowRunway =
+      runway !== Infinity && runway < BOARD_CONFIDENCE_LOW_RUNWAY_WEEKS;
+    const weeksSinceRaise = Math.max(0, next.week - next.weekOfLastRound);
+    const revBefore = Math.max(200, next.revenueAtLastRound);
+    // Investors expect roughly 2x revenue growth per year after the round.
+    const expected = 1 + weeksSinceRaise / 52;
+    const growthMultiple = next.revenuePerWeek / revBefore;
+    const growthFlat =
+      weeksSinceRaise > BOARD_CONFIDENCE_GROWTH_GRACE_WEEKS &&
+      growthMultiple < expected;
+
+    let delta = BOARD_CONFIDENCE_RECOVERY;
+    if (lowRunway) delta -= BOARD_CONFIDENCE_DECAY_LOW_RUNWAY;
+    if (growthFlat) delta -= BOARD_CONFIDENCE_DECAY_FLAT_GROWTH;
+    next.boardConfidence = Math.max(
+      0,
+      Math.min(100, next.boardConfidence + delta),
+    );
+
+    // Nagging reminder when confidence is low but not dead yet.
+    if (
+      next.boardConfidence > 0 &&
+      next.boardConfidence < BOARD_CONFIDENCE_WARN_AT &&
+      next.week % BOARD_CONFIDENCE_WARN_INTERVAL === 0
+    ) {
+      const reasons: string[] = [];
+      if (lowRunway) reasons.push("runway short");
+      if (growthFlat) reasons.push("growth flat");
+      pushLog(next, {
+        week: next.week,
+        message: `Board is restless (${Math.round(next.boardConfidence)}% confidence${
+          reasons.length ? ` — ${reasons.join(", ")}` : ""
+        }).`,
+        tone: "bad",
+      });
+    }
+  }
+
   next.peakHeadcount = Math.max(next.peakHeadcount, next.employees.length);
 
   next.history.push({
@@ -599,6 +796,13 @@ export function tick(s: GameState): GameState {
     pushLog(next, {
       week: next.week,
       message: "Ran out of money. Game over.",
+      tone: "bad",
+    });
+  } else if (next.round !== "pre-seed" && next.boardConfidence <= 0) {
+    next.gameOver = "fired";
+    pushLog(next, {
+      week: next.week,
+      message: "The board lost confidence and replaced you as CEO. Game over.",
       tone: "bad",
     });
   } else if (valuation(next) >= UNICORN_VALUATION) {

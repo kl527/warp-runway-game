@@ -36,6 +36,54 @@ export const RESCUE_MORALE_RESTORE = 80;
 // Morale hit on every remaining teammate when someone quits — attrition spreads.
 export const QUITTER_MORALE_PENALTY = 6;
 
+// ---- Customer churn ----
+// Fraction of gross MRR lost each tick to customer attrition. Revenue is
+// recomputed each tick from team output × (1 - churnRate), so healthy
+// companies keep most of their output and neglected ones bleed.
+// Baseline churn once a company has any revenue — nothing is truly sticky.
+export const BASE_CHURN_RATE = 0.02;
+// Each engineer trims churn (bug fixes, reliability). Capped per role family.
+export const CHURN_ENG_PROTECTION = 0.003;
+export const CHURN_ENG_PROTECTION_MAX = 0.045;
+// Designers keep UX from rotting — fewer than engineers but high per-head.
+export const CHURN_DESIGN_PROTECTION = 0.006;
+export const CHURN_DESIGN_PROTECTION_MAX = 0.03;
+// Revenue scale amplifies churn (larger customer base, more to lose).
+export const CHURN_SCALE_PER_K_REV = 0.00035;
+// Low morale bleeds into support quality — customers feel it.
+export const CHURN_LOW_MORALE_THRESHOLD = 55;
+export const CHURN_LOW_MORALE_PER_POINT = 0.0008;
+// Hard ceiling so a newly-founded company can't instantly hit 100% churn.
+export const MAX_CHURN_RATE = 0.14;
+
+// ---- Fundraise success ----
+// Gates let you *try* to raise; a roll decides if the round closes. Odds
+// weigh growth-since-last-round, runway cushion, and headcount headroom.
+export const FUNDRAISE_BASE_ODDS_BY_ROUND = [0.7, 0.55, 0.4, 0.28];
+export const FUNDRAISE_MIN_ODDS = 0.08;
+export const FUNDRAISE_MAX_ODDS = 0.96;
+// Investors want ~3x revenue between rounds before writing the next check.
+export const FUNDRAISE_EXPECTED_MULTIPLE = 3;
+// Failed raise: locked out of the VC office for a few weeks.
+export const FUNDRAISE_LOCKOUT_WEEKS = 4;
+export const FUNDRAISE_FAIL_MORALE_HIT = 8;
+export const FUNDRAISE_FAIL_CONFIDENCE_HIT = 18;
+
+// ---- Board confidence ----
+// Starts at 80 after seed close. Decays under low runway or flat growth.
+// Reaches 0 → board replaces the CEO (game over).
+export const BOARD_CONFIDENCE_START = 80;
+export const BOARD_CONFIDENCE_LOW_RUNWAY_WEEKS = 16;
+export const BOARD_CONFIDENCE_DECAY_LOW_RUNWAY = 1.8;
+// Flat growth = revenue multiple below what investors expected by now.
+export const BOARD_CONFIDENCE_GROWTH_GRACE_WEEKS = 10;
+export const BOARD_CONFIDENCE_DECAY_FLAT_GROWTH = 1.2;
+// Slow regen when things are healthy so confidence isn't a one-way ratchet.
+export const BOARD_CONFIDENCE_RECOVERY = 0.4;
+// Nagging log entry cadence when confidence is slipping.
+export const BOARD_CONFIDENCE_WARN_AT = 35;
+export const BOARD_CONFIDENCE_WARN_INTERVAL = 8;
+
 // Team-composition morale drag: when one category dominates the team,
 // the rest feel out of balance and morale slowly erodes each tick.
 export const TEAM_IMBALANCE_MIN_HEADCOUNT = 5;

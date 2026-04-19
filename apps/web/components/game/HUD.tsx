@@ -54,6 +54,17 @@ export function HUD() {
       />
       <Stat label="MORALE" value={`${hud.morale}%`} />
       <Stat
+        label="CHURN"
+        value={`${(hud.churnRate * 100).toFixed(1)}%/wk`}
+        tone={
+          hud.churnRate >= 0.06
+            ? "bad"
+            : hud.churnRate >= 0.03
+              ? "neutral"
+              : "good"
+        }
+      />
+      <Stat
         label="TEAM ⚖"
         value={`${hud.coveredCategories}/3`}
         tone={
@@ -65,6 +76,19 @@ export function HUD() {
         }
       />
       <Stat label="ROUND" value={hud.round} />
+      {hud.postSeed && (
+        <Stat
+          label="BOARD"
+          value={`${Math.round(hud.boardConfidence)}%`}
+          tone={
+            hud.boardConfidence < 20
+              ? "bad"
+              : hud.boardConfidence < 50
+                ? "neutral"
+                : "good"
+          }
+        />
+      )}
       <Stat label="OWN" value={`${Math.round(hud.founders * 100)}%`} />
       <Stat label="VAL" value={fmtMoney(hud.valuation)} />
 

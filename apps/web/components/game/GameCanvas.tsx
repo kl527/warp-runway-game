@@ -3,7 +3,11 @@
 import { useMemo } from "react";
 import { useGameStore } from "@/lib/game/store";
 import { cellKey, getMap } from "@/lib/game/map";
-import { selectEmployees, selectPosition } from "@/lib/game/selectors";
+import {
+  selectEmployees,
+  selectNearbyDoor,
+  selectPosition,
+} from "@/lib/game/selectors";
 import { Cell, type DisplayKind } from "./Cell";
 import { useShallow } from "zustand/react/shallow";
 import { EASTER_EGG_CHAR } from "@/lib/game/constants";
@@ -13,6 +17,7 @@ export function GameCanvas() {
   const round = useGameStore((s) => s.round);
   const employees = useGameStore(useShallow(selectEmployees));
   const easterEggs = useGameStore(useShallow((s) => s.easterEggs));
+  const nearby = useGameStore(useShallow(selectNearbyDoor));
 
   const map = useMemo(() => getMap(round), [round]);
 
@@ -34,6 +39,7 @@ export function GameCanvas() {
   }, [easterEggs]);
 
   const playerKey = cellKey(position.x, position.y);
+  const readyKey = nearby ? cellKey(nearby.x, nearby.y) : null;
 
   const gridStyle = {
     gridTemplateColumns: `repeat(${map.width}, 1ch)`,
@@ -41,28 +47,77 @@ export function GameCanvas() {
   };
 
   return (
-    <div
-      className="game-grid text-sm md:text-base"
-      style={gridStyle}
-      aria-label="Office map"
-    >
-      {map.cells.map((base) => {
-        const key = cellKey(base.x, base.y);
-        let char = base.char;
-        let kind: DisplayKind = base.kind;
-        if (key === playerKey) {
-          char = "@";
-          kind = "player";
-        } else if (employeeMap.has(key)) {
-          const emp = employeeMap.get(key)!;
-          char = emp.char;
-          kind = emp.quitting ? "employee_quitting" : "employee";
-        } else if (eggSet.has(key)) {
-          char = EASTER_EGG_CHAR;
-          kind = "easter_egg";
-        }
-        return <Cell key={key} char={char} kind={kind} />;
-      })}
+    <div className="flex flex-col items-center gap-2">
+      <InteractHint nearby={nearby} />
+      <div
+        className="game-grid text-sm md:text-base"
+        style={gridStyle}
+        aria-label="Office map"
+      >
+        {map.cells.map((base) => {
+          const key = cellKey(base.x, base.y);
+          let char = base.char;
+          let kind: DisplayKind = base.kind;
+          let ready = false;
+          if (key === playerKey) {
+            char = "@";
+            kind = "player";
+          } else if (employeeMap.has(key)) {
+            const emp = employeeMap.get(key)!;
+            char = emp.char;
+            kind = emp.quitting ? "employee_quitting" : "employee";
+          } else if (eggSet.has(key)) {
+            char = EASTER_EGG_CHAR;
+            kind = "easter_egg";
+          } else if (key === readyKey) {
+            ready = true;
+          }
+          return <Cell key={key} char={char} kind={kind} ready={ready} />;
+        })}
+      </div>
+    </div>
+  );
+}
+
+function InteractHint({
+  nearby,
+}: {
+  nearby: ReturnType<typeof selectNearbyDoor>;
+}) {
+  if (nearby) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-amber-400 bg-amber-400/10 px-3 py-1.5 text-xs md:text-sm text-amber-200 animate-hint-pulse shadow-[0_0_12px_rgba(251,191,36,0.35)]">
+        <span className="text-amber-300">▶</span>
+        <span>
+          Press{" "}
+          <kbd className="rounded border border-amber-300/60 bg-amber-300/10 px-1.5 py-0.5 font-bold text-amber-100">
+            SPACE
+          </kbd>{" "}
+          to enter{" "}
+          <span className="font-bold text-amber-100">{nearby.label}</span>
+          <span className="text-amber-300/80"> — {nearby.action}</span>
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900/60 px-3 py-1.5 text-xs md:text-sm text-slate-400">
+      <span className="text-slate-500">ⓘ</span>
+      <span>
+        Walk{" "}
+        <span className="text-emerald-400 font-bold">@</span> onto a room door{" "}
+        <span className="text-amber-300 font-bold">H</span>
+        <span className="text-slate-600">/</span>
+        <span className="text-amber-300 font-bold">V</span>
+        <span className="text-slate-600">/</span>
+        <span className="text-amber-300 font-bold">B</span>
+        <span className="text-slate-600">/</span>
+        <span className="text-amber-300 font-bold">C</span>, then press{" "}
+        <kbd className="rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 text-slate-200">
+          SPACE
+        </kbd>{" "}
+        to enter.
+      </span>
     </div>
   );
 }

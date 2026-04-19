@@ -63,7 +63,13 @@ export interface CapTable {
   investors: { round: string; pct: number }[];
 }
 
-export type ModalKind = "hire" | "fundraise" | "dashboard" | "choice" | "ai_critic";
+export type ModalKind =
+  | "hire"
+  | "fundraise"
+  | "dashboard"
+  | "choice"
+  | "ai_critic"
+  | "ai_pitch";
 
 export interface ChoiceOption {
   key: string;
@@ -79,6 +85,8 @@ export interface ModalState {
     title?: string;
     body?: string;
     critique?: string;
+    roundIdx?: number;
+    roundLabel?: string;
   };
 }
 
@@ -95,6 +103,9 @@ export interface GameState {
   startingBalance: number;
   employees: Employee[];
   revenuePerWeek: number;
+  // Fraction of gross MRR lost each week to customer attrition.
+  // 0-1; shaped by eng/design coverage, morale, and revenue scale.
+  churnRate: number;
   morale: number;
   lastInteractionWeek: number;
   capTable: CapTable;
@@ -102,7 +113,7 @@ export interface GameState {
   eventLog: LogEntry[];
   paused: boolean;
   speed: 1 | 2;
-  gameOver: "burned" | "unicorn" | null;
+  gameOver: "burned" | "unicorn" | "fired" | null;
   position: { x: number; y: number };
   modal: ModalState | null;
   peakHeadcount: number;
@@ -110,4 +121,12 @@ export interface GameState {
   history: HistoryPoint[];
   rngSeed: number;
   easterEggs: EasterEgg[];
+  // Board confidence 0-100. Decays when runway is thin or growth stalls
+  // after a round closes. Game ends in "fired" if it hits 0.
+  boardConfidence: number;
+  // Revenue at the last successful round close — growth baseline.
+  revenueAtLastRound: number;
+  weekOfLastRound: number;
+  // Fundraising locked out until this week (exclusive) after a failed raise.
+  fundraiseLockoutUntilWeek: number;
 }

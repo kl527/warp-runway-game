@@ -1,4 +1,5 @@
 import { ROLE_CATEGORIES, type RoleCategory } from "./constants";
+import { getMap, kindAt, type DoorKind } from "./map";
 import type { GameState } from "./state";
 import { runwayWeeks, valuation, weeklyBurn } from "./valuation";
 
@@ -24,6 +25,48 @@ export function teamDistribution(s: Pick<GameState, "employees">): TeamDistribut
     balanceScore: coveredCategories / ROLE_CATEGORIES.length,
   };
 }
+
+const DOOR_LABELS: Record<DoorKind, string> = {
+  hire: "HIRE",
+  vc: "VC",
+  dashboard: "DASHBOARD",
+  coffee: "COFFEE RUN",
+};
+
+const DOOR_ACTIONS: Record<DoorKind, string> = {
+  hire: "recruit",
+  vc: "pitch VCs",
+  dashboard: "review metrics",
+  coffee: "boost morale",
+};
+
+export interface NearbyDoor {
+  kind: DoorKind;
+  x: number;
+  y: number;
+  label: string;
+  action: string;
+}
+
+export const selectNearbyDoor = (s: GameState): NearbyDoor | null => {
+  if (s.modal || s.gameOver) return null;
+  const map = getMap(s.round);
+  const { x, y } = s.position;
+  const neighbors: Array<[number, number]> = [
+    [x, y],
+    [x, y - 1],
+    [x, y + 1],
+    [x - 1, y],
+    [x + 1, y],
+  ];
+  for (const [cx, cy] of neighbors) {
+    const k = kindAt(map, cx, cy);
+    if (k === "hire" || k === "vc" || k === "dashboard" || k === "coffee") {
+      return { kind: k, x: cx, y: cy, label: DOOR_LABELS[k], action: DOOR_ACTIONS[k] };
+    }
+  }
+  return null;
+};
 
 export const selectPosition = (s: GameState) => s.position;
 export const selectEmployees = (s: GameState) => s.employees;
@@ -51,6 +94,9 @@ export const selectHUD = (s: GameState) => {
     paused: s.paused,
     speed: s.speed,
     coveredCategories: dist.coveredCategories,
+    churnRate: s.churnRate,
+    boardConfidence: s.boardConfidence,
+    postSeed: s.round !== "pre-seed",
   };
 };
 
@@ -70,4 +116,7 @@ export const hudEqual = (
   a.headcount === b.headcount &&
   a.paused === b.paused &&
   a.speed === b.speed &&
-  a.coveredCategories === b.coveredCategories;
+  a.coveredCategories === b.coveredCategories &&
+  a.churnRate === b.churnRate &&
+  a.boardConfidence === b.boardConfidence &&
+  a.postSeed === b.postSeed;

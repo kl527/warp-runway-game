@@ -29,7 +29,10 @@ function fmt(n: number): string {
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const mode = (url.searchParams.get("mode") ?? "burned") as "burned" | "unicorn";
+  const mode = (url.searchParams.get("mode") ?? "burned") as
+    | "burned"
+    | "unicorn"
+    | "fired";
   const week = Number(url.searchParams.get("w") ?? 0);
   const headcount = Number(url.searchParams.get("h") ?? 0);
   const balance = Number(url.searchParams.get("b") ?? 0);
@@ -39,8 +42,10 @@ export async function GET(req: NextRequest) {
     `Burned ${fmt(balance)} hiring ${headcount} people in ${week} weeks.`;
 
   const font = await getFont();
-  const accent = mode === "unicorn" ? "#e879f9" : "#f43f5e";
-  const headline = mode === "unicorn" ? "UNICORN" : "R.I.P.";
+  const accent =
+    mode === "unicorn" ? "#e879f9" : mode === "fired" ? "#fbbf24" : "#f43f5e";
+  const headline =
+    mode === "unicorn" ? "UNICORN" : mode === "fired" ? "FIRED" : "R.I.P.";
   const bigNumber =
     mode === "unicorn" ? `$${(val / 1_000_000_000).toFixed(2)}B` : fmt(balance);
   const bigLabel = mode === "unicorn" ? "valuation" : "final balance";

@@ -13,15 +13,16 @@ export type DisplayKind =
 interface CellProps {
   char: string;
   kind: DisplayKind;
+  ready?: boolean;
 }
 
 const CLASS_BY_KIND: Record<DisplayKind, string> = {
   wall: "text-slate-500",
   floor: "text-slate-800",
-  hire: "text-amber-300",
-  vc: "text-amber-300",
-  dashboard: "text-amber-300",
-  coffee: "text-amber-300",
+  hire: "text-amber-300 animate-door-idle",
+  vc: "text-amber-300 animate-door-idle",
+  dashboard: "text-amber-300 animate-door-idle",
+  coffee: "text-amber-300 animate-door-idle",
   sign: "text-amber-200/70",
   player: "text-emerald-400 animate-player-pulse",
   employee: "text-cyan-400",
@@ -29,8 +30,11 @@ const CLASS_BY_KIND: Record<DisplayKind, string> = {
   easter_egg: "text-fuchsia-400 animate-pulse font-bold",
 };
 
-function CellImpl({ char, kind }: CellProps) {
-  return <span className={CLASS_BY_KIND[kind]}>{char}</span>;
+const READY_CLASS =
+  "text-slate-950 font-bold bg-amber-300 rounded-sm animate-door-ready ring-1 ring-amber-200";
+
+function CellImpl({ char, kind, ready }: CellProps) {
+  return <span className={ready ? READY_CLASS : CLASS_BY_KIND[kind]}>{char}</span>;
 }
 
 export const Cell = memo(CellImpl);

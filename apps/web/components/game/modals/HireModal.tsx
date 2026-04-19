@@ -45,15 +45,11 @@ export function HireModal() {
             : "border-slate-700 bg-slate-950/40 text-slate-300"
         }`}
       >
-        <span>
-          Desks: <span className="tabular-nums text-slate-100">{employees.length}</span>
-          <span className="text-slate-500"> / </span>
-          <span className="tabular-nums text-slate-100">{capacity}</span>
+        <span className="tabular-nums">
+          Desks {employees.length}/{capacity}
         </span>
         <span className="text-[10px] uppercase tracking-wider">
-          {officeFull
-            ? "Office is full — raise a round to expand"
-            : `${freeSeats} free desk${freeSeats === 1 ? "" : "s"}`}
+          {officeFull ? "Full — raise to expand" : `${freeSeats} free`}
         </span>
       </div>
       <div className="flex gap-2 mb-4">
@@ -78,14 +74,12 @@ export function HireModal() {
           const weeklySalary = Math.round((role.baseSalary * mult) / 52);
           const qty = qtyByRole[role.id] ?? 1;
           const existing = counts.get(role.id) ?? 0;
-          const nextBreakdown = role.disabled
-            ? null
-            : calcHireCost(role, existing, 1, location);
-          const breakdown = role.disabled
-            ? null
-            : calcHireCost(role, existing, qty, location);
-          const nextCost = nextBreakdown?.total ?? 0;
-          const totalCost = breakdown?.total ?? 0;
+          const nextCost = role.disabled
+            ? 0
+            : calcHireCost(role, existing, 1, location).total;
+          const totalCost = role.disabled
+            ? 0
+            : calcHireCost(role, existing, qty, location).total;
           const unaffordable = balance < totalCost;
           const overCapacity = !role.disabled && qty > freeSeats;
           const disabled = role.disabled || unaffordable || overCapacity;
@@ -104,7 +98,7 @@ export function HireModal() {
                 <span className="font-bold text-slate-100">{role.name}</span>
                 {!role.disabled && existing > 0 && (
                   <span className="ml-auto text-[10px] text-slate-500 uppercase tracking-wider">
-                    On team: {existing}
+                    ×{existing}
                   </span>
                 )}
               </div>
@@ -127,30 +121,26 @@ export function HireModal() {
               ) : (
                 <>
                   <div className="text-xs text-slate-400 space-y-0.5">
-                    <div>
-                      Weekly: <span className="text-slate-200">${weeklySalary.toLocaleString()}</span>
-                    </div>
-                    <div>
-                      Next all-in:{" "}
-                      <span className="text-slate-200">
-                        ${nextCost.toLocaleString()}
-                      </span>
-                      {nextBreakdown && (
-                        <span className="text-slate-500">
-                          {" "}
-                          (sign ${nextBreakdown.signing.toLocaleString()} +
-                          recruiter ${nextBreakdown.recruiter.toLocaleString()} +
-                          setup ${nextBreakdown.setup.toLocaleString()})
+                    <div className="flex gap-3">
+                      <span>
+                        <span className="text-slate-500">Salary</span>{" "}
+                        <span className="text-slate-200">
+                          ${weeklySalary.toLocaleString()}/wk
                         </span>
-                      )}
+                      </span>
+                      <span>
+                        <span className="text-slate-500">Hire</span>{" "}
+                        <span className="text-slate-200">
+                          ${nextCost.toLocaleString()}
+                        </span>
+                      </span>
                     </div>
                     <div className="text-emerald-300">
                       {formatEffect(role.weeklyEffect)}
                     </div>
                     {hasPremium && (
                       <div className="text-[10px] text-amber-400/80">
-                        Market premium: +
-                        {Math.round(MARKET_PREMIUM_PER_COPY * 100)}% per existing {role.name.toLowerCase()}
+                        +{Math.round(MARKET_PREMIUM_PER_COPY * 100)}% market premium per duplicate
                       </div>
                     )}
                   </div>
@@ -193,9 +183,9 @@ export function HireModal() {
                       className="flex-1 py-1 rounded bg-emerald-600 text-slate-950 text-sm font-bold hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {officeFull
-                        ? "OFFICE FULL"
+                        ? "FULL"
                         : overCapacity
-                        ? `ONLY ${freeSeats} DESK${freeSeats === 1 ? "" : "S"} LEFT`
+                        ? `${freeSeats} LEFT`
                         : unaffordable
                         ? "CAN'T AFFORD"
                         : `HIRE ×${qty} · $${totalCost.toLocaleString()}`}
@@ -208,7 +198,7 @@ export function HireModal() {
         })}
       </div>
       <p className="text-[10px] text-slate-600 mt-4">
-        Esc to close. Weekly salary is charged automatically each tick.
+        Salary auto-deducted weekly. Esc to close.
       </p>
     </ModalShell>
   );

@@ -1,32 +1,37 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useActions, useGameStore } from "@/lib/game/store";
 import { useShallow } from "zustand/react/shallow";
 import { valuation } from "@/lib/game/valuation";
 import { teamDistribution } from "@/lib/game/selectors";
 import { WARP_URL } from "@/lib/game/constants";
 import { useDeathSound, useLevelUpSound } from "@/lib/game/sounds";
-
-function epitaph(weeks: number, headcount: number, balance: number): string {
-  const b = Math.abs(balance);
-  const pretty =
-    b >= 1_000_000
-      ? `$${(b / 1_000_000).toFixed(1)}M`
-      : b >= 1_000
-        ? `$${(b / 1_000).toFixed(0)}k`
-        : `$${b.toFixed(0)}`;
-  return `Burned ${pretty} hiring ${headcount} people in ${weeks} weeks.`;
-}
+import type { LeaderboardRow } from "@warp/shared";
 
 export function EndScreen() {
   const actions = useActions();
   const [handle, setHandle] = useState("");
   const [submitted, setSubmitted] = useState<null | "ok" | "err">(null);
+  const [submittedHandle, setSubmittedHandle] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [rows, setRows] = useState<LeaderboardRow[] | null>(null);
   const confettiFired = useRef(false);
   const playDeath = useDeathSound();
   const playLevelUp = useLevelUpSound();
+
+  const fetchBoard = useCallback(async () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!apiUrl) return;
+    try {
+      const res = await fetch(`${apiUrl}/leaderboard`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { rows: LeaderboardRow[] };
+      setRows(data.rows);
+    } catch {
+      // ignore — section just won't render
+    }
+  }, []);
 
   const state = useGameStore(
     useShallow((s) => {
@@ -36,22 +41,20 @@ export function EndScreen() {
         week: s.week,
         balance: s.balance,
         peakHeadcount: s.peakHeadcount,
-        headcount: s.employees.length,
         revenue: s.revenuePerWeek,
         coveredCategories: dist.coveredCategories,
-        eng: dist.counts.engineering,
-        design: dist.counts.design,
-        gtm: dist.counts.gtm,
       };
     })
   );
 
   const val = valuation({ revenuePerWeek: state.revenue });
   const isUnicorn = state.gameOver === "unicorn";
-  const teamBreakdown = `${state.eng}/${state.design}/${state.gtm} (eng/design/gtm)`;
-  const epi =
-    epitaph(state.week, state.peakHeadcount, state.balance) +
-    (state.headcount > 0 ? ` Team: ${teamBreakdown}.` : "");
+  const isFired = state.gameOver === "fired";
+
+  useEffect(() => {
+    if (!state.gameOver) return;
+    fetchBoard();
+  }, [state.gameOver, fetchBoard]);
 
   useEffect(() => {
     if (!state.gameOver) return;
@@ -77,27 +80,74 @@ export function EndScreen() {
 
   if (!state.gameOver) return null;
 
-  const shareText = isUnicorn
-    ? `I became a Unicorn on Warp Runway at week ${state.week}. ${state.peakHeadcount} people. Try it:`
-    : `${epi} Try surviving yourself:`;
   const shareUrlOrigin =
     typeof window !== "undefined" ? window.location.origin : "";
-  const ogParams = new URLSearchParams({
-    mode: isUnicorn ? "unicorn" : "burned",
-    w: String(state.week),
-    h: String(state.peakHeadcount),
-    b: String(state.balance),
-    v: String(val),
-    e: epi,
-  });
-  const ogUrl = `${shareUrlOrigin}/api/og?${ogParams.toString()}`;
   const playUrl = `${shareUrlOrigin}/play`;
+
+  const valStr =
+    val >= 1_000_000_000
+      ? `$${(val / 1_000_000_000).toFixed(2)}B`
+      : `$${(val / 1_000_000).toFixed(1)}M`;
+  const balAbs = Math.abs(state.balance);
+  const balStr =
+    balAbs >= 1_000_000
+      ? `$${(balAbs / 1_000_000).toFixed(1)}M`
+      : balAbs >= 1_000
+        ? `$${(balAbs / 1_000).toFixed(0)}k`
+        : `$${balAbs.toFixed(0)}`;
+
+  const WIDTH = 24;
+  const row = (label: string, value: string) => {
+    const inner = `  ${label}${value}`;
+    return `|${inner}${" ".repeat(Math.max(0, WIDTH - inner.length))}|`;
+  };
+  const center = (text: string) => {
+    const left = Math.max(0, Math.floor((WIDTH - text.length) / 2));
+    const right = Math.max(0, WIDTH - text.length - left);
+    return `|${" ".repeat(left)}${text}${" ".repeat(right)}|`;
+  };
+  const border = `+${"-".repeat(WIDTH)}+`;
+
+  const asciiCard = isUnicorn
+    ? [
+        border,
+        center("** UNICORN **"),
+        border,
+        row("Week:      ", String(state.week)),
+        row("Team:      ", String(state.peakHeadcount)),
+        row("Valuation: ", valStr),
+        border,
+      ].join("\n")
+    : isFired
+      ? [
+          border,
+          center("FIRED BY BOARD"),
+          border,
+          row("Week:      ", String(state.week)),
+          row("Team:      ", String(state.peakHeadcount)),
+          row("Left:      ", balStr),
+          border,
+        ].join("\n")
+      : [
+          border,
+          center("R.I.P. STARTUP"),
+          border,
+          row("Week:      ", String(state.week)),
+          row("Burned:    ", balStr),
+          row("Team:      ", String(state.peakHeadcount)),
+          border,
+        ].join("\n");
+
+  const tagline = isUnicorn
+    ? "I hit Unicorn on Warp Runway. Try it:"
+    : "I flamed out on Warp Runway. Beat me:";
+  const shareText = `${asciiCard}\n\n${tagline}`;
   const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
     shareText
   )}&url=${encodeURIComponent(playUrl)}`;
 
   async function submit() {
-    const trimmed = handle.trim();
+    const trimmed = handle.trim().slice(0, 24);
     if (!trimmed) return;
     setSubmitting(true);
     try {
@@ -107,19 +157,32 @@ export function EndScreen() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          handle: trimmed.slice(0, 24),
+          handle: trimmed,
           weeksSurvived: state.week,
           peakHeadcount: state.peakHeadcount,
           finalValuation: val,
         }),
       });
-      setSubmitted(res.ok ? "ok" : "err");
+      if (res.ok) {
+        setSubmitted("ok");
+        setSubmittedHandle(trimmed);
+        fetchBoard();
+      } else {
+        setSubmitted("err");
+      }
     } catch {
       setSubmitted("err");
     } finally {
       setSubmitting(false);
     }
   }
+
+  const fmtVal = (n: number) =>
+    n >= 1_000_000_000
+      ? `$${(n / 1_000_000_000).toFixed(1)}B`
+      : n >= 1_000_000
+        ? `$${(n / 1_000_000).toFixed(1)}M`
+        : `$${(n / 1_000).toFixed(0)}k`;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/95 flex items-center justify-center p-8 overflow-auto">
@@ -135,30 +198,16 @@ export function EndScreen() {
   \___/|_| \_|___\____\___/|_| \_\_| \_(_)
 `}
             </pre>
-            <h1 className="text-3xl font-bold text-fuchsia-300 mt-4">
-              You became a Unicorn at week {state.week}.
+            <h1 className="text-2xl font-bold text-fuchsia-300 mt-2">
+              Unicorn at week {state.week}.
             </h1>
-            <p className="text-slate-400 mt-2">
-              Valuation: ${(val / 1_000_000_000).toFixed(2)}B. Mythical status unlocked.
-            </p>
           </div>
         ) : (
           <div className="text-center">
-            <pre className="text-rose-400 text-xs leading-tight">
-{String.raw`
-        ______________
-       /              \
-      /    R. I. P.    \
-     |                  |
-     |  YOUR STARTUP    |
-     |   died at        |
-     |   week ${String(state.week).padEnd(3)}       |
-     |                  |
-  ___|________________|___
-`}
-            </pre>
-            <h1 className="text-2xl font-bold text-rose-300 mt-2">
-              You burned. {epi}
+            <h1
+              className={`text-2xl font-bold ${isFired ? "text-amber-300" : "text-rose-300"}`}
+            >
+              {isFired ? "Fired by the board." : "You burned."}
             </h1>
           </div>
         )}
@@ -183,15 +232,7 @@ export function EndScreen() {
             rel="noopener noreferrer"
             className="flex-1 text-center px-4 py-2 rounded bg-sky-500 text-slate-950 font-bold hover:bg-sky-400"
           >
-            Share on Twitter
-          </a>
-          <a
-            href={ogUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 text-center px-4 py-2 rounded border border-slate-700 hover:bg-slate-800"
-          >
-            Preview card
+            Share on X
           </a>
           <button
             onClick={actions.reset}
@@ -201,12 +242,14 @@ export function EndScreen() {
           </button>
         </div>
 
-        <div className="border border-slate-800 rounded p-4">
-          <h3 className="font-bold text-slate-200 mb-2">Leaderboard</h3>
+        <div className="border border-slate-800 rounded p-4 space-y-3">
+          <div className="flex items-baseline justify-between">
+            <h3 className="font-bold text-slate-200">Leaderboard</h3>
+            <span className="text-xs text-slate-500">top by weeks survived</span>
+          </div>
+
           {submitted === "ok" ? (
-            <p className="text-emerald-300 text-sm">
-              Submitted. Glory achieved.
-            </p>
+            <p className="text-emerald-300 text-xs">Submitted as {submittedHandle}.</p>
           ) : (
             <div className="flex gap-2">
               <input
@@ -226,10 +269,45 @@ export function EndScreen() {
             </div>
           )}
           {submitted === "err" && (
-            <p className="text-rose-300 text-xs mt-2">
+            <p className="text-rose-300 text-xs">
               Submission failed. D1 may not be configured locally.
             </p>
           )}
+
+          {rows && rows.length > 0 ? (
+            <ol className="space-y-1 text-sm font-mono">
+              <li className="grid grid-cols-[1.5rem_1fr_3rem_3rem_4rem] gap-2 text-[10px] uppercase tracking-wide text-slate-500 px-2">
+                <span>#</span>
+                <span>handle</span>
+                <span className="text-right">wks</span>
+                <span className="text-right">team</span>
+                <span className="text-right">val</span>
+              </li>
+              {rows.slice(0, 10).map((r, i) => {
+                const mine = submittedHandle && r.handle === submittedHandle;
+                return (
+                  <li
+                    key={`${r.handle}-${r.created_at}`}
+                    className={`grid grid-cols-[1.5rem_1fr_3rem_3rem_4rem] gap-2 px-2 py-1 rounded ${
+                      mine
+                        ? "bg-emerald-500/10 text-emerald-200"
+                        : "text-slate-300"
+                    }`}
+                  >
+                    <span className="text-slate-500">{i + 1}</span>
+                    <span className="truncate">{r.handle}</span>
+                    <span className="text-right tabular-nums">{r.weeks_survived}</span>
+                    <span className="text-right tabular-nums">{r.peak_headcount}</span>
+                    <span className="text-right tabular-nums">
+                      {fmtVal(r.final_valuation)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : rows && rows.length === 0 ? (
+            <p className="text-slate-500 text-xs">No entries yet. Be first.</p>
+          ) : null}
         </div>
 
         <div className="border-t border-slate-800 pt-4 text-center">
