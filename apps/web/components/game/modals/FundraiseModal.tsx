@@ -37,30 +37,32 @@ export function FundraiseModal() {
             odds >= 0.6
               ? "text-emerald-300"
               : odds >= 0.35
-                ? "text-amber-300"
-                : "text-rose-300";
+                ? "text-warp-amber-9"
+                : "text-warp-red-9";
           return (
             <div
               key={round.id}
-              className={`border rounded p-4 ${
-                gate.ok ? "border-emerald-700/70" : "border-slate-700"
+              className={`rounded-lg p-4 bg-white/[0.02] ${
+                gate.ok
+                  ? "shadow-[inset_0_0_0_1px_rgba(52,211,153,0.3)]"
+                  : "shadow-ring-w"
               }`}
             >
               <div className="flex items-center justify-between mb-2">
                 <div>
-                  <h3 className="font-bold text-slate-100">{round.label}</h3>
-                  <p className="text-xs text-slate-400">
+                  <h3 className="font-medium text-white/90">{round.label}</h3>
+                  <p className="text-xs text-white/55 mt-0.5">
                     ${(round.check / 1_000_000).toFixed(0)}M check /{" "}
                     {Math.round(round.dilution * 100)}% dilution
                   </p>
                 </div>
-                <div className="text-right text-xs text-slate-400">
+                <div className="text-right text-xs text-white/55">
                   <div>Needs {round.minEmployees} employees</div>
                   <div>Needs ${round.minRevenue.toLocaleString()}/wk MRR</div>
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-white/45">
                   {state.employees}/{round.minEmployees} employees, $
                   {state.revenue.toLocaleString()}/wk MRR
                   {gate.ok && (
@@ -76,7 +78,7 @@ export function FundraiseModal() {
                     actions.fundraise(idx);
                   }}
                   disabled={!gate.ok}
-                  className="px-3 py-1 rounded bg-emerald-600 text-slate-950 text-sm font-bold hover:bg-emerald-500 disabled:opacity-40"
+                  className="px-3 py-1 rounded-lg bg-warp-orange text-white text-sm font-medium hover:bg-warp-orange-hover transition disabled:bg-white/[0.05] disabled:text-white/30"
                 >
                   {gate.ok ? `PITCH (${oddsPct}%)` : (gate.reason ?? "LOCKED")}
                 </button>
@@ -84,14 +86,16 @@ export function FundraiseModal() {
             </div>
           );
         })}
-        <p className="text-xs text-slate-500 border-t border-slate-800 pt-2">
+        <p className="text-xs text-white/45 pt-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
           VCs close based on growth since the last round, runway cushion, and
           headroom past the gate. A failed pitch locks you out for 4 weeks and
           tanks morale.
         </p>
 
-        <div className="border-t border-slate-800 pt-3 text-xs text-slate-400">
-          <div className="font-bold text-slate-300 mb-1">Cap Table</div>
+        <div className="pt-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] text-xs text-white/55">
+          <div className="font-brand text-[10px] uppercase tracking-[0.14em] text-warp-accent-3 mb-1">
+            Cap Table
+          </div>
           <div>
             Founders: {(state.capTable.founders * 100).toFixed(1)}%
           </div>

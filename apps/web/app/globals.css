@@ -9,11 +9,13 @@
 html,
 body {
   color: #e2e8f0;
-  background-color: #020617;
+  background-color: #050608;
   background-image:
-    radial-gradient(ellipse at 50% 35%, rgba(30, 41, 59, 0.55), transparent 60%),
-    radial-gradient(ellipse at 50% 90%, rgba(15, 23, 42, 0.9), transparent 70%);
+    radial-gradient(ellipse at 50% 0%, rgba(255, 99, 32, 0.06), transparent 55%),
+    radial-gradient(ellipse at 50% 35%, rgba(30, 41, 59, 0.45), transparent 60%),
+    radial-gradient(ellipse at 50% 95%, rgba(10, 14, 22, 0.9), transparent 70%);
   background-attachment: fixed;
+  font-feature-settings: "ss01", "cv11";
 }
 
 body::after {

@@ -77,22 +77,24 @@ export function AiCriticModal() {
 
   return (
     <ModalShell title="The Board Observer" onClose={actions.closeModal}>
-      <div className="border-l-2 border-emerald-500 pl-3 text-slate-200">
-        <div className="text-[10px] uppercase tracking-wider mb-1 text-slate-500">
+      <div className="pl-3 text-white/85 shadow-[inset_2px_0_0_rgba(255,61,0,0.7)]">
+        <div className="font-brand text-[10px] uppercase tracking-[0.14em] mb-1 text-white/45">
           Observer
         </div>
-        <div className="whitespace-pre-wrap text-sm">{question}</div>
+        <div className="whitespace-pre-wrap font-serif text-base leading-snug text-white/90">
+          {question}
+        </div>
       </div>
 
       {phase === "settled" && (
         <div
-          className={`mt-4 border-l-2 pl-3 ${
+          className={`mt-4 pl-3 ${
             verdict === "good"
-              ? "border-emerald-400 text-emerald-200"
-              : "border-rose-500 text-rose-200"
+              ? "shadow-[inset_2px_0_0_rgba(52,211,153,0.7)] text-emerald-200"
+              : "shadow-[inset_2px_0_0_rgba(255,35,35,0.7)] text-warp-red-9"
           }`}
         >
-          <div className="text-[10px] uppercase tracking-wider mb-1 opacity-70">
+          <div className="font-brand text-[10px] uppercase tracking-[0.14em] mb-1 opacity-70">
             Verdict — {verdict === "good" ? "approved" : "rejected"}
           </div>
           <div className="whitespace-pre-wrap text-sm">{reply}</div>
@@ -112,14 +114,14 @@ export function AiCriticModal() {
             placeholder="Answer in one line. (Enter to send)"
             rows={2}
             disabled={phase === "judging"}
-            className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
+            className="w-full bg-white/[0.02] shadow-ring-w focus:shadow-[inset_0_0_0_1px_rgba(255,61,0,0.5)] rounded-lg p-2 text-sm text-white/90 outline-none disabled:opacity-50 transition"
           />
-          {error && <div className="text-xs text-rose-400">{error}</div>}
+          {error && <div className="text-xs text-warp-red-9">{error}</div>}
           <div className="flex justify-end">
             <button
               onClick={() => void send()}
               disabled={phase === "judging" || !input.trim()}
-              className="px-4 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed rounded text-white"
+              className="px-4 py-1.5 text-sm bg-warp-orange hover:bg-warp-orange-hover disabled:bg-white/[0.05] disabled:text-white/30 disabled:cursor-not-allowed rounded-lg text-white font-medium transition"
             >
               {phase === "judging" ? "..." : "Send"}
             </button>
@@ -129,7 +131,7 @@ export function AiCriticModal() {
         <div className="mt-4 flex justify-end">
           <button
             onClick={actions.closeModal}
-            className="px-4 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded text-white"
+            className="px-4 py-1.5 text-sm shadow-ring-w hover:bg-white/[0.04] rounded-lg text-white/85 transition"
           >
             Back to work
           </button>

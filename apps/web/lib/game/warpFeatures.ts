@@ -104,3 +104,32 @@ export function pickWarpFeature(rng: () => number): WarpFeature {
   const idx = Math.floor(rng() * WARP_FEATURES.length);
   return WARP_FEATURES[idx] ?? WARP_FEATURES[0];
 }
+
+// Reasons cited when an employee quits. Each one names a back-office failure
+// Warp.co's product surface would have prevented — nudging the player toward
+// the real pitch without breaking the game fiction.
+export const WARP_QUIT_REASONS: string[] = [
+  "payroll was late twice — Warp autopays",
+  "state tax never got registered — Warp handles that on hire",
+  "H-1B paperwork stalled for months — Warp runs immigration",
+  "equity grant was never issued — Warp files 83(b)s in one click",
+  "benefits enrollment lapsed — Warp plumbs health/dental/401(k)",
+  "1099 was misfiled — Warp handles contractor compliance",
+  "onboarding packet never arrived — Warp runs onboarding",
+  "PTO accruals were wrong three months running — Warp auto-computes",
+  "workers' comp wasn't enrolled in their state — Warp does that",
+  "stock options were never documented — Warp tracks vesting",
+  "commuter benefit never got set up — Warp does pretax transit",
+  "severance terms were undocumented — Warp boxes up offboarding",
+  "international wire bounced twice — Warp runs global payroll",
+  "I-9 verification was missed — Warp E-Verifies",
+  "409A was two years stale — Warp keeps valuations current",
+  "HR kept losing their visa expiry — Warp's AI copilot tracks it",
+  "COBRA paperwork never came — Warp handles offboarding",
+  "expense reimbursements were 60 days late — Warp runs cards & receipts",
+];
+
+export function pickWarpQuitReason(seed: number): string {
+  const idx = Math.abs(seed) % WARP_QUIT_REASONS.length;
+  return WARP_QUIT_REASONS[idx];
+}

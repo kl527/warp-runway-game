@@ -29,6 +29,7 @@ import {
   FUNDRAISE_MAX_ODDS,
   FUNDRAISE_MIN_ODDS,
   FUNDRAISE_ROUNDS,
+  HIRE_COOLDOWN_WEEKS,
   UNICORN_VALUATION,
   LOCATION_MULTIPLIERS,
   MAX_CHURN_RATE,
@@ -51,7 +52,7 @@ import { cellKey, getMap, inOffice, isWalkable, kindAt, officeCapacity } from ".
 import { makeName } from "./names";
 import { roleById, ROLES } from "./roles";
 import type { ChoiceOption, EasterEgg, Employee, GameState, LogEntry, Role, RoundId } from "./state";
-import { pickWarpFeature, WARP_FEATURES } from "./warpFeatures";
+import { pickWarpFeature, pickWarpQuitReason, WARP_FEATURES } from "./warpFeatures";
 import { nextHireCost, runwayWeeks, valuation, weeklyBurn } from "./valuation";
 import { teamDistribution } from "./selectors";
 import { ROLE_CATEGORIES } from "./constants";
@@ -111,7 +112,13 @@ export function initialState(): GameState {
     revenueAtLastRound: 0,
     weekOfLastRound: 0,
     fundraiseLockoutUntilWeek: 0,
+    hireCooldownUntilWeek: 0,
   };
+}
+
+export function canHire(s: GameState): { ok: boolean; weeksLeft: number } {
+  const weeksLeft = Math.max(0, s.hireCooldownUntilWeek - s.week);
+  return { ok: weeksLeft === 0, weeksLeft };
 }
 
 function pushLog(s: GameState, entry: LogEntry): void {
@@ -315,6 +322,18 @@ export function interact(s: GameState): GameState {
   const result = adjacentBuilding(s);
   if (result.kind === "none") return s;
   if (result.kind === "modal") {
+    if (result.modal?.kind === "hire") {
+      const gate = canHire(s);
+      if (!gate.ok) {
+        const next: GameState = { ...s, eventLog: s.eventLog.slice() };
+        pushLog(next, {
+          week: s.week,
+          message: `Hiring on cooldown — ${gate.weeksLeft}w left. Let the team settle.`,
+          tone: "bad",
+        });
+        return next;
+      }
+    }
     return { ...s, modal: result.modal, paused: true };
   }
   // coffee: bump morale across the team; does not pause.
@@ -377,8 +396,6 @@ export function hireMany(
     employees: s.employees.slice(),
     eventLog: s.eventLog.slice(),
     history: s.history.slice(),
-    modal: null,
-    paused: false,
   };
 
   for (let i = 0; i < qty; i++) {
@@ -400,6 +417,7 @@ export function hireMany(
   }
 
   next.peakHeadcount = Math.max(next.peakHeadcount, next.employees.length);
+  next.hireCooldownUntilWeek = next.week + HIRE_COOLDOWN_WEEKS;
   recomputeRevenue(next);
   recomputeMorale(next);
   const qtyLabel = qty > 1 ? `${qty}× ` : "";
@@ -617,9 +635,12 @@ export function fundraise(
     boardConfidence: Math.min(100, s.boardConfidence + 25),
     fundraiseLockoutUntilWeek: 0,
   };
+  const prevBurn = weeklyBurn(s);
+  const newBurn = weeklyBurn(next);
+  const burnDelta = newBurn - prevBurn;
   pushLog(next, {
     week: s.week,
-    message: `Closed ${def.label}: $${(def.check / 1_000_000).toFixed(0)}M at ${Math.round(def.dilution * 100)}% dilution. Office expanded.`,
+    message: `Closed ${def.label}: $${(def.check / 1_000_000).toFixed(0)}M at ${Math.round(def.dilution * 100)}% dilution. Office expanded — overhead +$${burnDelta.toLocaleString()}/wk.`,
     tone: "good",
   });
   return next;
@@ -652,14 +673,13 @@ export function tick(s: GameState): GameState {
     if (e.quittingSinceTick === null) {
       const toward = MORALE_BASELINE;
       m += (toward - m) * 0.05;
-      // Coffee staleness is the main deterministic quit driver: every week
-      // without a coffee run, morale drops by a fixed amount. Skip a few and
-      // someone turns yellow on a predictable cadence.
-      if (sinceCoffee > 2) m -= 3;
+      // Coffee staleness is the main deterministic quit driver, but kept
+      // gentle so the team doesn't unravel from a single missed coffee run.
+      if (sinceCoffee > 3) m -= 1.5;
       if (imbalance.penalty > 0) m -= imbalance.penalty;
     } else {
       // Yellow employees slide further toward the exit each tick.
-      m -= 2;
+      m -= 1.2;
     }
     const clamped = Math.max(0, Math.min(100, m));
     let quittingSinceTick = e.quittingSinceTick;
@@ -724,10 +744,14 @@ export function tick(s: GameState): GameState {
       ...e,
       morale: Math.max(0, e.morale - penalty),
     }));
-    for (const q of quitters) {
+    for (let i = 0; i < quitters.length; i++) {
+      const q = quitters[i];
+      const seed =
+        next.tickCount + i * 37 + (q.id.charCodeAt(0) || 0) + q.id.length;
+      const reason = pickWarpQuitReason(seed);
       pushLog(next, {
         week: next.week,
-        message: `${q.name} (${q.role.name}) quit. Team morale −${penalty}.`,
+        message: `${q.name} (${q.role.name}) quit — ${reason}. Team morale −${penalty}.`,
         tone: "bad",
       });
     }

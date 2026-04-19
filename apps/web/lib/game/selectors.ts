@@ -46,6 +46,8 @@ export interface NearbyDoor {
   y: number;
   label: string;
   action: string;
+  locked?: boolean;
+  lockedReason?: string;
 }
 
 export const selectNearbyDoor = (s: GameState): NearbyDoor | null => {
@@ -62,7 +64,18 @@ export const selectNearbyDoor = (s: GameState): NearbyDoor | null => {
   for (const [cx, cy] of neighbors) {
     const k = kindAt(map, cx, cy);
     if (k === "hire" || k === "vc" || k === "dashboard" || k === "coffee") {
-      return { kind: k, x: cx, y: cy, label: DOOR_LABELS[k], action: DOOR_ACTIONS[k] };
+      const door: NearbyDoor = {
+        kind: k,
+        x: cx,
+        y: cy,
+        label: DOOR_LABELS[k],
+        action: DOOR_ACTIONS[k],
+      };
+      if (k === "hire" && s.week < s.hireCooldownUntilWeek) {
+        door.locked = true;
+        door.lockedReason = `${s.hireCooldownUntilWeek - s.week}w cooldown`;
+      }
+      return door;
     }
   }
   return null;

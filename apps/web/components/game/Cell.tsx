@@ -8,7 +8,8 @@ export type DisplayKind =
   | "player"
   | "employee"
   | "employee_quitting"
-  | "easter_egg";
+  | "easter_egg"
+  | "hire_locked";
 
 interface CellProps {
   char: string;
@@ -28,6 +29,7 @@ const CLASS_BY_KIND: Record<DisplayKind, string> = {
   employee: "text-cyan-300 drop-shadow-glow-cyan",
   employee_quitting: "text-rose-300 animate-pulse font-bold drop-shadow-glow-rose",
   easter_egg: "text-fuchsia-400 animate-pulse font-bold drop-shadow-glow-fuchsia",
+  hire_locked: "text-slate-500 opacity-60",
 };
 
 const READY_CLASS =

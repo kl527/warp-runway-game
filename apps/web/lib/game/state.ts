@@ -129,4 +129,6 @@ export interface GameState {
   weekOfLastRound: number;
   // Fundraising locked out until this week (exclusive) after a failed raise.
   fundraiseLockoutUntilWeek: number;
+  // Hiring locked out until this week (exclusive) after the last successful hire.
+  hireCooldownUntilWeek: number;
 }

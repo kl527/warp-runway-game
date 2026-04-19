@@ -1,21 +1,29 @@
 import {
   BASE_WEEKLY_BURN,
+  FUNDRAISE_ROUNDS,
   HIRE_SETUP_COST,
   LOCATION_MULTIPLIERS,
   MARKET_PREMIUM_PER_COPY,
   RECRUITER_FEE_PCT,
   VALUATION_MULTIPLIER,
+  roundBurnMultiplier,
   type LocationId,
 } from "./constants";
 import { roleById } from "./roles";
 import type { GameState, Role } from "./state";
 
+function completedRoundIdxFor(round: GameState["round"]): number {
+  if (round === "pre-seed") return -1;
+  return FUNDRAISE_ROUNDS.findIndex((r) => r.id === round);
+}
+
 export function valuation(s: Pick<GameState, "revenuePerWeek">): number {
   return Math.max(0, Math.round(s.revenuePerWeek * 52 * VALUATION_MULTIPLIER));
 }
 
-export function weeklyBurn(s: Pick<GameState, "employees">): number {
-  let total = BASE_WEEKLY_BURN;
+export function weeklyBurn(s: Pick<GameState, "employees" | "round">): number {
+  const overheadMult = roundBurnMultiplier(completedRoundIdxFor(s.round));
+  let total = BASE_WEEKLY_BURN * overheadMult;
   for (const e of s.employees) {
     const mult = LOCATION_MULTIPLIERS[e.location];
     total += (e.role.baseSalary * mult) / 52;
@@ -26,7 +34,7 @@ export function weeklyBurn(s: Pick<GameState, "employees">): number {
 // Accepts an optional precomputed burn so callers that already know it
 // (HUD selectors, tick loop) don't iterate employees twice.
 export function runwayWeeks(
-  s: Pick<GameState, "balance" | "employees" | "revenuePerWeek">,
+  s: Pick<GameState, "balance" | "employees" | "revenuePerWeek" | "round">,
   burn?: number
 ): number {
   const b = burn ?? weeklyBurn(s);

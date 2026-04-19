@@ -189,16 +189,16 @@ export function EndScreen() {
   };
 
   const frameGlow = isUnicorn
-    ? "shadow-frame-fuchsia border-fuchsia-500/40"
+    ? "shadow-frame-fuchsia"
     : isFired
-      ? "shadow-frame-amber border-amber-500/40"
-      : "shadow-frame-rose border-rose-500/40";
+      ? "shadow-frame-amber"
+      : "shadow-frame-warp";
 
   const youAccent = isUnicorn
-    ? "bg-fuchsia-500/10 text-fuchsia-100 ring-1 ring-fuchsia-500/40"
+    ? "bg-fuchsia-500/10 text-fuchsia-100 shadow-[inset_0_0_0_1px_rgba(232,121,249,0.4)]"
     : isFired
-      ? "bg-amber-500/10 text-amber-100 ring-1 ring-amber-500/40"
-      : "bg-rose-500/10 text-rose-100 ring-1 ring-rose-500/40";
+      ? "bg-warp-amber-9/10 text-warp-amber-9 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.4)]"
+      : "bg-warp-orange/10 text-warp-orange shadow-[inset_0_0_0_1px_rgba(255,61,0,0.4)]";
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/95 flex items-center justify-center p-6 overflow-auto">
@@ -206,7 +206,7 @@ export function EndScreen() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: "easeOut" }}
-        className={`max-w-xl w-full space-y-5 border ${frameGlow} rounded-lg p-6 bg-slate-950/70 backdrop-blur relative overflow-hidden`}
+        className={`max-w-xl w-full space-y-5 ${frameGlow} shadow-modal-w rounded-xl p-7 bg-[#0b0d12]/90 backdrop-blur relative overflow-hidden`}
       >
         <div
           aria-hidden="true"
@@ -229,32 +229,32 @@ export function EndScreen() {
   \___/|_| \_|___\____\___/|_| \_\_| \_(_)
 `}
             </pre>
-            <h1 className="text-xl font-bold text-fuchsia-300 mt-1">
+            <h1 className="font-serif text-3xl sm:text-4xl text-fuchsia-200 mt-2 tracking-tight">
               Unicorn at week {state.week}.
             </h1>
           </div>
         ) : (
           <div className="text-center relative">
             <h1
-              className={`text-xl sm:text-2xl font-bold ${
+              className={`font-serif text-3xl sm:text-4xl tracking-tight ${
                 isFired
-                  ? "text-amber-300 drop-shadow-glow-amber"
-                  : "text-rose-300 drop-shadow-glow-rose"
+                  ? "text-warp-amber-9 drop-shadow-glow-amber"
+                  : "text-warp-orange drop-shadow-[0_0_8px_rgba(255,61,0,0.45)]"
               }`}
             >
               {isFired ? "Fired by the board." : "You burned."}
             </h1>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="font-mono text-xs text-white/45 mt-2">
               Week {state.week} · {balStr} · team of {state.peakHeadcount}
             </p>
           </div>
         )}
 
         {/* Combined leaderboard + your run */}
-        <div className="border border-slate-800 rounded p-4 space-y-2 relative">
+        <div className="shadow-ring-w rounded-lg p-4 space-y-2 relative">
           <div className="flex items-baseline justify-between">
-            <h3 className="font-bold text-slate-200">Leaderboard</h3>
-            <span className="text-[10px] uppercase tracking-wide text-slate-500">
+            <h3 className="font-brand text-sm font-medium text-warp-accent-3">Leaderboard</h3>
+            <span className="font-brand text-[10px] uppercase tracking-[0.14em] text-white/40">
               {boardSource === "api"
                 ? "live · top by weeks survived"
                 : boardSource === "mixed"
@@ -352,29 +352,29 @@ export function EndScreen() {
             href={twitterUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 text-center px-4 py-2 rounded bg-sky-500 text-slate-950 font-bold hover:bg-sky-400"
+            className="flex-1 text-center px-4 py-2 rounded-lg bg-white/[0.04] text-white/85 font-medium shadow-ring-w hover:bg-white/[0.08] transition"
           >
             Share on X
           </a>
           <button
             onClick={actions.reset}
-            className="flex-1 px-4 py-2 rounded border border-slate-700 hover:bg-slate-800"
+            className="flex-1 px-4 py-2 rounded-lg shadow-ring-w text-white/85 hover:bg-white/[0.04] transition"
           >
             Play again
           </button>
         </div>
 
-        <div className="border-t border-slate-800 pt-4 text-center">
-          <p className="text-slate-400 text-sm mb-2">
+        <div className="pt-5 mt-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] text-center">
+          <p className="font-sans text-white/55 text-sm mb-3 mt-3">
             Running a real startup? Warp actually automates all of this.
           </p>
           <a
             href={WARP_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block px-4 py-2 rounded bg-amber-400 text-slate-950 font-bold hover:bg-amber-300"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-warp-orange text-white font-medium hover:bg-warp-orange-hover transition shadow-[0_8px_20px_-8px_rgba(255,61,0,0.55)]"
           >
-            Try Warp &rarr;
+            Try Warp <span aria-hidden>→</span>
           </a>
         </div>
       </motion.div>

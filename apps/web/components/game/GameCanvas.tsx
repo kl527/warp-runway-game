@@ -21,6 +21,9 @@ export function GameCanvas() {
   const employees = useGameStore(useShallow(selectEmployees));
   const easterEggs = useGameStore(useShallow((s) => s.easterEggs));
   const nearby = useGameStore(useShallow(selectNearbyDoor));
+  const week = useGameStore((s) => s.week);
+  const hireCooldownUntilWeek = useGameStore((s) => s.hireCooldownUntilWeek);
+  const hireLocked = week < hireCooldownUntilWeek;
 
   const map = useMemo(() => getMap(round), [round]);
 
@@ -91,7 +94,9 @@ export function GameCanvas() {
           } else if (eggSet.has(key)) {
             char = EASTER_EGG_CHAR;
             kind = "easter_egg";
-          } else if (key === readyKey) {
+          } else if (base.kind === "hire" && hireLocked) {
+            kind = "hire_locked";
+          } else if (key === readyKey && !(nearby?.kind === "hire" && nearby.locked)) {
             ready = true;
           }
             return <Cell key={key} char={char} kind={kind} ready={ready} />;
@@ -108,6 +113,18 @@ function InteractHint({
 }: {
   nearby: ReturnType<typeof selectNearbyDoor>;
 }) {
+  if (nearby?.locked) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-rose-500/60 bg-rose-950/40 px-3 py-1.5 text-xs md:text-sm text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.25)]">
+        <span className="text-rose-300">⏳</span>
+        <span>
+          <span className="font-bold text-rose-100">{nearby.label}</span> locked —{" "}
+          <span className="font-bold">{nearby.lockedReason}</span>
+          <span className="text-rose-300/80"> · let the team settle before hiring again</span>
+        </span>
+      </div>
+    );
+  }
   if (nearby) {
     return (
       <div className="flex items-center gap-2 rounded-md border border-amber-400 bg-amber-400/10 px-3 py-1.5 text-xs md:text-sm text-amber-200 animate-hint-pulse shadow-[0_0_12px_rgba(251,191,36,0.35)]">

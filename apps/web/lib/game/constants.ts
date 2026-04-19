@@ -3,8 +3,25 @@ import type { RoundId } from "./state";
 export const TICK_MS = 1000;
 export const STARTING_BALANCE = 500_000;
 // Baseline weekly overhead independent of headcount: rent, ad spend,
-// software & tools, legal/accounting, etc. ~$130k/yr.
+// software & tools, legal/accounting, etc. ~$130k/yr at pre-seed.
 export const BASE_WEEKLY_BURN = 2_500;
+// Overhead scales with funding stage — bigger office, more SaaS seats,
+// real legal/accounting, perks, compliance. Indexed off completedRoundIdx:
+// -1 = pre-seed, 0 = seed, 1 = series-a, 2 = series-b, 3+ = C, D, …
+export const ROUND_BURN_MULTIPLIERS = [1.8, 3.5, 6.5] as const;
+// Geometric growth per round past Series B.
+export const ROUND_BURN_GROWTH_PAST_B = 1.7;
+export function roundBurnMultiplier(completedIdx: number): number {
+  if (completedIdx < 0) return 1;
+  if (completedIdx < ROUND_BURN_MULTIPLIERS.length) {
+    return ROUND_BURN_MULTIPLIERS[completedIdx];
+  }
+  const stepsPastB = completedIdx - (ROUND_BURN_MULTIPLIERS.length - 1);
+  return (
+    ROUND_BURN_MULTIPLIERS[ROUND_BURN_MULTIPLIERS.length - 1] *
+    Math.pow(ROUND_BURN_GROWTH_PAST_B, stepsPastB)
+  );
+}
 // Signing-bonus market premium per existing hire of the same role.
 // Scaling one function 10-deep gets dramatically more expensive than the first.
 export const MARKET_PREMIUM_PER_COPY = 0.15;
@@ -27,20 +44,21 @@ export const COFFEE_MORALE_BOOST = 10;
 export const MORALE_BASELINE = 70;
 export const CRITIC_INTERVAL_WEEKS = 8;
 // Individual morale at which an employee starts threatening to quit (turns yellow).
-export const QUIT_MORALE_THRESHOLD = 48;
+export const QUIT_MORALE_THRESHOLD = 32;
 // Ticks the player has to reach a yellow employee before they walk out.
-// TICK_MS is 1000ms, so 5 ticks = 5s of real time at speed 1.
-export const QUIT_DEADLINE_TICKS = 5;
+// TICK_MS is 1000ms, so 8 ticks = 8s of real time at speed 1.
+export const QUIT_DEADLINE_TICKS = 8;
 // Morale an employee is restored to when the player steps on their tile.
-// Rescues land just above the quit threshold so relief is temporary — the
-// player has to keep the coffee runs and team balance going.
-export const RESCUE_MORALE_RESTORE = 62;
+// Rescues land well above the quit threshold so relief isn't immediately
+// clawed back by coffee staleness.
+export const RESCUE_MORALE_RESTORE = 65;
 // Background attrition cadence — every N weeks, one non-quitting employee is
 // flipped to yellow regardless of their morale. Even a perfectly-run team
 // loses people; this keeps the quit loop alive for well-managed shops.
-export const BACKGROUND_QUIT_INTERVAL_WEEKS = 18;
-// Morale hit on every remaining teammate when someone quits — attrition spreads.
-export const QUITTER_MORALE_PENALTY = 6;
+export const BACKGROUND_QUIT_INTERVAL_WEEKS = 35;
+// Morale hit on every remaining teammate when someone quits — attrition
+// spreads, but gently, so one quit doesn't cascade into a mass exodus.
+export const QUITTER_MORALE_PENALTY = 2;
 
 // ---- Customer churn ----
 // Fraction of gross MRR lost each tick to customer attrition. Revenue is
@@ -72,6 +90,10 @@ export const FUNDRAISE_MAX_ODDS = 0.96;
 export const FUNDRAISE_EXPECTED_MULTIPLE = 3;
 // Failed raise: locked out of the VC office for a few weeks.
 export const FUNDRAISE_LOCKOUT_WEEKS = 4;
+// Weeks the HIRE door is frozen after a successful hire batch. Forces the
+// player to live with the burn/morale consequences of their last batch
+// before stacking more headcount.
+export const HIRE_COOLDOWN_WEEKS = 5;
 export const FUNDRAISE_FAIL_MORALE_HIT = 8;
 export const FUNDRAISE_FAIL_CONFIDENCE_HIT = 18;
 

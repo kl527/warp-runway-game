@@ -21,14 +21,14 @@ function fmtMoney(n: number): string {
 
 function balanceColor(pct: number): string {
   if (pct > 0.4) return "from-emerald-500 to-emerald-300";
-  if (pct > 0.1) return "from-amber-500 to-amber-300";
-  return "from-rose-500 to-rose-400";
+  if (pct > 0.1) return "from-warp-amber-9 to-warp-amber-8";
+  return "from-warp-red-10 to-warp-red-9";
 }
 
 function balanceGlow(pct: number): string {
   if (pct > 0.4) return "shadow-[0_0_10px_rgba(52,211,153,0.45)]";
-  if (pct > 0.1) return "shadow-[0_0_8px_rgba(251,191,36,0.35)]";
-  return "shadow-[0_0_8px_rgba(251,113,133,0.4)]";
+  if (pct > 0.1) return "shadow-[0_0_8px_rgba(245,158,11,0.4)]";
+  return "shadow-[0_0_8px_rgba(255,35,35,0.45)]";
 }
 
 export function HUD() {
@@ -38,10 +38,10 @@ export function HUD() {
   const barPct = Math.max(0, Math.min(1, pct)) * 100;
 
   return (
-    <div className="w-full border-b border-slate-800 bg-slate-950/90 backdrop-blur px-4 py-2 flex flex-wrap items-center gap-3 text-xs md:text-sm relative z-20">
+    <div className="w-full bg-[#07090d]/90 backdrop-blur px-4 py-2 flex flex-wrap items-center gap-3 text-xs md:text-sm relative z-20 shadow-[inset_0_-1px_0_rgba(255,255,255,0.06)]">
       <div className="flex items-center gap-2 min-w-[240px]">
-        <span className="text-slate-500 text-[10px] md:text-xs uppercase tracking-wider">BAL</span>
-        <div className="flex-1 h-3 bg-slate-900 border border-slate-800 rounded overflow-hidden">
+        <span className="font-brand text-white/45 text-[10px] md:text-xs uppercase tracking-[0.14em]">BAL</span>
+        <div className="flex-1 h-3 bg-white/[0.04] shadow-ring-w rounded overflow-hidden">
           <div
             className={`h-full bg-gradient-to-r ${balanceColor(pct)} ${balanceGlow(pct)} transition-all duration-300`}
             style={{ width: `${barPct}%` }}
@@ -49,7 +49,7 @@ export function HUD() {
         </div>
         <FlashingValue
           value={Math.round(hud.balance / 1000)}
-          className={`font-bold tabular-nums ${hud.balance < 0 ? "text-rose-400" : "text-slate-100"}`}
+          className={`font-bold tabular-nums ${hud.balance < 0 ? "text-warp-red-9" : "text-slate-100"}`}
         >
           {fmtMoney(hud.balance)}
         </FlashingValue>
@@ -88,18 +88,20 @@ export function HUD() {
       <div className="ml-auto flex items-center gap-2">
         <button
           onClick={actions.togglePause}
-          className="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 transition"
+          className="px-2 py-1 rounded shadow-ring-w hover:bg-white/[0.04] transition text-white/80"
           aria-label={hud.paused ? "Resume" : "Pause"}
         >
           {hud.paused ? "▶" : "❚❚"}
         </button>
-        <div className="flex rounded border border-slate-700 overflow-hidden">
+        <div className="flex rounded shadow-ring-w overflow-hidden">
           {[1, 2].map((s) => (
             <button
               key={s}
               onClick={() => actions.setSpeed(s as 1 | 2)}
-              className={`px-2 py-1 ${
-                hud.speed === s ? "bg-emerald-600 text-slate-950" : "hover:bg-slate-800"
+              className={`px-2 py-1 transition ${
+                hud.speed === s
+                  ? "bg-warp-orange text-white"
+                  : "text-white/70 hover:bg-white/[0.04]"
               }`}
             >
               {s}x
@@ -126,21 +128,21 @@ function Stat({
     tone === "good"
       ? "text-emerald-300"
       : tone === "bad"
-        ? "text-rose-300"
+        ? "text-warp-red-9"
         : "text-slate-100";
 
   const ringTone =
     tone === "good"
-      ? "border-emerald-900/60"
+      ? "shadow-[inset_0_0_0_1px_rgba(52,211,153,0.22)]"
       : tone === "bad"
-        ? "border-rose-900/60"
-        : "border-slate-800";
+        ? "shadow-[inset_0_0_0_1px_rgba(255,35,35,0.28)]"
+        : "shadow-ring-w";
 
   return (
     <div
-      className={`flex items-baseline gap-1.5 tabular-nums bg-slate-900/50 border ${ringTone} rounded px-2 py-1`}
+      className={`flex items-baseline gap-1.5 tabular-nums bg-white/[0.02] ${ringTone} rounded px-2 py-1`}
     >
-      <span className="text-slate-500 text-[10px] md:text-xs uppercase tracking-wider">
+      <span className="font-brand text-white/45 text-[10px] md:text-xs uppercase tracking-[0.14em]">
         {label}
       </span>
       <FlashingValue value={flashKey ?? value} className={`font-bold ${cls}`}>

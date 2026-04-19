@@ -13,7 +13,8 @@ export function DashboardOverlay() {
   const balance = useGameStore((s) => s.balance);
   const revenuePerWeek = useGameStore((s) => s.revenuePerWeek);
   const week = useGameStore((s) => s.week);
-  const burn = weeklyBurn({ employees });
+  const round = useGameStore((s) => s.round);
+  const burn = weeklyBurn({ employees, round });
   const synergies = computeSynergies(
     { employees, balance, week, revenuePerWeek },
     { revenue: revenuePerWeek, burn }
@@ -46,13 +47,13 @@ export function DashboardOverlay() {
     <ModalShell title="DASHBOARD" wide onClose={actions.closeModal}>
       <div className="space-y-4">
         <div>
-          <div className="flex justify-between text-xs text-slate-400 mb-1">
-            <span className="text-emerald-300">Balance</span>
-            <span className="text-cyan-300">Revenue</span>
+          <div className="flex justify-between text-xs mb-1">
+            <span className="font-brand uppercase tracking-[0.14em] text-emerald-300/85">Balance</span>
+            <span className="font-brand uppercase tracking-[0.14em] text-cyan-300/85">Revenue</span>
           </div>
           <svg
             viewBox={`0 0 ${W} ${H}`}
-            className="w-full h-40 bg-slate-950 border border-slate-800 rounded"
+            className="w-full h-40 bg-white/[0.02] shadow-ring-w rounded-lg"
           >
             <polyline
               points={balancePoints}
@@ -117,9 +118,11 @@ export function DashboardOverlay() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-slate-800 rounded p-2">
-      <div className="text-slate-500">{label}</div>
-      <div className="text-slate-100 font-bold tabular-nums">{value}</div>
+    <div className="shadow-ring-w bg-white/[0.02] rounded-lg p-2">
+      <div className="font-brand text-[10px] uppercase tracking-[0.14em] text-white/45">
+        {label}
+      </div>
+      <div className="text-white/95 font-medium tabular-nums">{value}</div>
     </div>
   );
 }

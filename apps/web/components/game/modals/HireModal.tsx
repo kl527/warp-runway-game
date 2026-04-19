@@ -35,16 +35,16 @@ export function HireModal() {
   return (
     <ModalShell title="HIRE SHOP" wide onClose={actions.closeModal}>
       <div
-        className={`mb-3 text-xs flex items-center justify-between rounded border px-3 py-1.5 ${
+        className={`mb-3 text-xs flex items-center justify-between rounded-lg px-3 py-1.5 ${
           officeFull
-            ? "border-rose-700/60 bg-rose-950/30 text-rose-200"
-            : "border-slate-700 bg-slate-950/40 text-slate-300"
+            ? "shadow-[inset_0_0_0_1px_rgba(255,35,35,0.3)] bg-warp-red-12/30 text-warp-red-9"
+            : "shadow-ring-w bg-white/[0.02] text-white/75"
         }`}
       >
         <span className="tabular-nums">
           Desks {employees.length}/{capacity}
         </span>
-        <span className="text-[10px] uppercase tracking-wider">
+        <span className="font-brand text-[10px] uppercase tracking-[0.14em]">
           {officeFull ? "Full — raise to expand" : `${freeSeats} free`}
         </span>
       </div>
@@ -53,10 +53,10 @@ export function HireModal() {
           <button
             key={loc}
             onClick={() => setLocation(loc)}
-            className={`px-3 py-1 rounded border text-xs ${
+            className={`px-3 py-1 rounded-lg text-xs transition ${
               location === loc
-                ? "bg-emerald-600 border-emerald-400 text-slate-950"
-                : "border-slate-700 text-slate-300 hover:bg-slate-800"
+                ? "bg-warp-orange text-white shadow-[0_4px_12px_-4px_rgba(255,61,0,0.5)]"
+                : "shadow-ring-w text-white/75 hover:bg-white/[0.04]"
             }`}
           >
             {loc} x{LOCATION_MULTIPLIERS[loc]}
@@ -82,24 +82,24 @@ export function HireModal() {
           return (
             <div
               key={role.id}
-              className={`border rounded p-3 ${
+              className={`rounded-lg p-3 ${
                 role.disabled
-                  ? "border-amber-700/50 bg-amber-950/20"
-                  : "border-slate-700 bg-slate-950/40"
+                  ? "shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)] bg-warp-amber-9/[0.05]"
+                  : "shadow-ring-w bg-white/[0.02]"
               }`}
             >
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-bold text-cyan-300">{role.char}</span>
                 <span className="font-bold text-slate-100">{role.name}</span>
                 {!role.disabled && existing > 0 && (
-                  <span className="ml-auto text-[10px] text-slate-500 uppercase tracking-wider">
+                  <span className="ml-auto font-brand text-[10px] text-white/40 uppercase tracking-[0.14em]">
                     ×{existing}
                   </span>
                 )}
               </div>
               {role.disabled ? (
                 <div>
-                  <p className="text-xs text-amber-300 mb-2">
+                  <p className="text-xs text-warp-amber-9 mb-2">
                     {role.disabledTooltip}
                   </p>
                   {role.disabledUrl && (
@@ -107,7 +107,7 @@ export function HireModal() {
                       href={role.disabledUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-block text-xs underline text-amber-200 hover:text-amber-100"
+                      className="inline-block text-xs underline text-warp-amber-8 hover:text-warp-amber-9"
                     >
                       Visit warp.co
                     </a>
@@ -115,17 +115,17 @@ export function HireModal() {
                 </div>
               ) : (
                 <>
-                  <div className="text-xs text-slate-400 space-y-0.5">
+                  <div className="text-xs text-white/65 space-y-0.5">
                     <div className="flex gap-3">
                       <span>
-                        <span className="text-slate-500">Salary</span>{" "}
-                        <span className="text-slate-200">
+                        <span className="text-white/40">Salary</span>{" "}
+                        <span className="text-white/85">
                           ${weeklySalary.toLocaleString()}/wk
                         </span>
                       </span>
                       <span>
-                        <span className="text-slate-500">Hire</span>{" "}
-                        <span className="text-slate-200">
+                        <span className="text-white/40">Hire</span>{" "}
+                        <span className="text-white/85">
                           ${nextCost.toLocaleString()}
                         </span>
                       </span>
@@ -135,12 +135,12 @@ export function HireModal() {
                     </div>
                   </div>
                   <div className="mt-2 flex items-center gap-2">
-                    <div className="flex items-center rounded border border-slate-700 overflow-hidden">
+                    <div className="flex items-center rounded-lg shadow-ring-w overflow-hidden">
                       <button
                         onClick={() => setQty(role.id, qty - 1)}
                         disabled={qty <= 1}
                         aria-label="Decrease quantity"
-                        className="px-2 py-1 text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                        className="px-2 py-1 text-white/85 hover:bg-white/[0.05] disabled:opacity-40 transition"
                       >
                         −
                       </button>
@@ -153,13 +153,13 @@ export function HireModal() {
                           const parsed = parseInt(e.target.value, 10);
                           if (!isNaN(parsed)) setQty(role.id, parsed);
                         }}
-                        className="w-10 bg-slate-950 text-center text-sm tabular-nums outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-10 bg-transparent text-center text-sm tabular-nums outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                       <button
                         onClick={() => setQty(role.id, qty + 1)}
                         disabled={qty >= MAX_QTY}
                         aria-label="Increase quantity"
-                        className="px-2 py-1 text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                        className="px-2 py-1 text-white/85 hover:bg-white/[0.05] disabled:opacity-40 transition"
                       >
                         +
                       </button>
@@ -170,7 +170,7 @@ export function HireModal() {
                         actions.hireMany(role.id, location, qty);
                       }}
                       disabled={disabled}
-                      className="flex-1 py-1 rounded bg-emerald-600 text-slate-950 text-sm font-bold hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="flex-1 py-1 rounded-lg bg-warp-orange text-white text-sm font-medium hover:bg-warp-orange-hover transition disabled:bg-white/[0.05] disabled:text-white/30 disabled:cursor-not-allowed"
                     >
                       {officeFull
                         ? "FULL"
@@ -187,7 +187,7 @@ export function HireModal() {
           );
         })}
       </div>
-      <p className="text-[10px] text-slate-600 mt-4">
+      <p className="font-mono text-[10px] text-white/35 mt-4">
         Salary auto-deducted weekly. Esc to close.
       </p>
     </ModalShell>
