@@ -3,17 +3,8 @@
 import { useActions, useGameStore } from "@/lib/game/store";
 import { ModalShell } from "./ModalShell";
 import { useShallow } from "zustand/react/shallow";
-import { SYNERGIES, computeSynergies } from "@/lib/game/synergies";
+import { computeSynergies } from "@/lib/game/synergies";
 import { weeklyBurn } from "@/lib/game/valuation";
-
-const TIER_ORDER = ["foundational", "scale", "specialist", "situational", "endgame"] as const;
-const TIER_LABELS: Record<(typeof TIER_ORDER)[number], string> = {
-  foundational: "Foundational",
-  scale: "Scale",
-  specialist: "Specialist",
-  situational: "Situational",
-  endgame: "Endgame",
-};
 
 export function DashboardOverlay() {
   const actions = useActions();
@@ -27,7 +18,6 @@ export function DashboardOverlay() {
     { employees, balance, week, revenuePerWeek },
     { revenue: revenuePerWeek, burn }
   );
-  const activeIds = new Set(synergies.active.map((s) => s.id));
 
   const W = 600;
   const H = 200;
@@ -95,58 +85,30 @@ export function DashboardOverlay() {
           />
         </div>
         <div>
-          <div className="flex items-baseline justify-between mb-2">
+          <div className="flex items-baseline justify-between mb-1">
             <span className="text-xs uppercase tracking-wider text-slate-400">
-              Team Synergies
+              Active multipliers
             </span>
             <span className="text-xs text-emerald-300 tabular-nums">
               {synergies.revenueMultiplier > 1
-                ? `×${synergies.revenueMultiplier.toFixed(2)} revenue · ${synergies.active.length} active`
-                : "no combos yet"}
+                ? `×${synergies.revenueMultiplier.toFixed(2)} total`
+                : "none"}
             </span>
           </div>
-          <div className="space-y-3">
-            {TIER_ORDER.map((tier) => {
-              const group = SYNERGIES.filter((s) => (s.tier ?? "scale") === tier);
-              if (group.length === 0) return null;
-              const activeInGroup = group.filter((s) => activeIds.has(s.id)).length;
-              return (
-                <div key={tier}>
-                  <div className="flex items-baseline justify-between mb-1">
-                    <span className="text-[10px] uppercase tracking-wider text-slate-500">
-                      {TIER_LABELS[tier]}
-                    </span>
-                    <span className="text-[10px] text-slate-600 tabular-nums">
-                      {activeInGroup}/{group.length}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                    {group.map((syn) => {
-                      const on = activeIds.has(syn.id);
-                      return (
-                        <div
-                          key={syn.id}
-                          className={`border rounded px-2 py-1.5 text-[11px] flex items-baseline justify-between gap-3 ${
-                            on
-                              ? "border-emerald-600 bg-emerald-950/30 text-emerald-200"
-                              : "border-slate-800 bg-slate-950/40 text-slate-500"
-                          }`}
-                        >
-                          <div>
-                            <div className="font-bold">{syn.label}</div>
-                            <div className="text-[10px] opacity-80">{syn.description}</div>
-                          </div>
-                          <div className="tabular-nums font-bold">
-                            ×{syn.multiplier.toFixed(2)}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {synergies.active.length === 0 ? (
+            <div className="text-[11px] text-slate-600 italic">
+              No synergies active yet.
+            </div>
+          ) : (
+            <ul className="text-[11px] text-emerald-200 space-y-0.5">
+              {synergies.active.map((s) => (
+                <li key={s.id} className="flex justify-between tabular-nums">
+                  <span>{s.label}</span>
+                  <span className="text-emerald-400">×{s.multiplier.toFixed(2)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </ModalShell>

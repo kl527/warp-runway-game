@@ -1,6 +1,6 @@
 import {
   COFFEE_MORALE_BOOST,
-  EASTER_EGG_CASH_GIFT,
+  easterEggGiftForRound,
   EASTER_EGG_LIFETIME_WEEKS,
   EASTER_EGG_MAX_ON_BOARD,
   EASTER_EGG_SPAWN_CHANCE,
@@ -16,9 +16,13 @@ import {
   RESCUE_MORALE_RESTORE,
   SHUFFLE_EVERY_TICKS,
   STARTING_BALANCE,
+  TEAM_IMBALANCE_DOMINANCE_THRESHOLD,
+  TEAM_IMBALANCE_LOG_INTERVAL,
+  TEAM_IMBALANCE_MIN_HEADCOUNT,
+  TEAM_IMBALANCE_MORALE_PENALTY,
 } from "./constants";
-import type { LocationId } from "./constants";
-import { cellKey, getMap, inOffice, isWalkable, kindAt } from "./map";
+import type { LocationId, RoleCategory } from "./constants";
+import { cellKey, getMap, inOffice, isWalkable, kindAt, officeCapacity } from "./map";
 import { makeName } from "./names";
 import { roleById, ROLES } from "./roles";
 import type { ChoiceOption, EasterEgg, Employee, GameState, LogEntry, Role, RoundId } from "./state";
@@ -117,6 +121,43 @@ function recomputeMorale(s: GameState): void {
   s.morale = Math.round(Math.max(0, Math.min(100, avg)));
 }
 
+// Measures how lopsided the team's category mix is. Returns the per-tick
+// morale penalty (0 when healthy) plus the dominant category/share so the
+// tick loop can log an explanation.
+function computeImbalance(s: GameState): {
+  penalty: number;
+  dominant: RoleCategory | null;
+  share: number;
+} {
+  if (s.employees.length < TEAM_IMBALANCE_MIN_HEADCOUNT) {
+    return { penalty: 0, dominant: null, share: 0 };
+  }
+  const dist = teamDistribution(s);
+  const total = s.employees.length;
+  let dominant: RoleCategory | null = null;
+  let maxShare = 0;
+  for (const cat of ROLE_CATEGORIES) {
+    const share = dist.counts[cat] / total;
+    if (share > maxShare) {
+      maxShare = share;
+      dominant = cat;
+    }
+  }
+  if (maxShare <= TEAM_IMBALANCE_DOMINANCE_THRESHOLD) {
+    return { penalty: 0, dominant, share: maxShare };
+  }
+  // Excess above threshold scales the hit: 55% is baseline, 100% is ~3×.
+  const excess = maxShare - TEAM_IMBALANCE_DOMINANCE_THRESHOLD;
+  const penalty = TEAM_IMBALANCE_MORALE_PENALTY * (1 + excess / 0.2);
+  return { penalty, dominant, share: maxShare };
+}
+
+const CATEGORY_LABEL: Record<RoleCategory, string> = {
+  engineering: "engineers",
+  design: "designers",
+  gtm: "GTM hires",
+};
+
 // ---- movement ----
 
 export function move(s: GameState, dx: number, dy: number): GameState {
@@ -163,15 +204,16 @@ function collectEggAt(s: GameState, x: number, y: number): GameState {
   const egg = s.easterEggs[idx];
   const feature =
     WARP_FEATURES.find((f) => f.id === egg.featureId) ?? WARP_FEATURES[0];
+  const gift = easterEggGiftForRound(s.round);
   const next: GameState = {
     ...s,
-    balance: s.balance + EASTER_EGG_CASH_GIFT,
+    balance: s.balance + gift,
     easterEggs: s.easterEggs.filter((_, i) => i !== idx),
     eventLog: s.eventLog.slice(),
   };
   pushLog(next, {
     week: next.week,
-    message: `◆ WARP PRESENT: ${feature.name}. ${feature.blurb} +$${EASTER_EGG_CASH_GIFT.toLocaleString()}.`,
+    message: `◆ WARP PRESENT: ${feature.name}. ${feature.blurb} +$${gift.toLocaleString()}.`,
     tone: "warp",
   });
   return next;
@@ -244,10 +286,27 @@ export function hireMany(
   if (s.gameOver || qty <= 0) return s;
   const role = roleById(roleId);
   if (!role || role.disabled) return s;
+  const map = getMap(s.round);
+  const capacity = officeCapacity(map);
+  const freeSeats = Math.max(0, capacity - s.employees.length);
+  if (freeSeats <= 0 || qty > freeSeats) {
+    const next: GameState = {
+      ...s,
+      eventLog: s.eventLog.slice(),
+    };
+    pushLog(next, {
+      week: s.week,
+      message:
+        freeSeats <= 0
+          ? `Office is full (${s.employees.length}/${capacity}). Raise the next round to expand before hiring.`
+          : `Only ${freeSeats} desk${freeSeats === 1 ? "" : "s"} left — can't fit ${qty} new ${role.name.toLowerCase()}${qty === 1 ? "" : "s"}.`,
+      tone: "bad",
+    });
+    return next;
+  }
   const totalCost = nextHireCost(s, roleId, qty, location);
   if (s.balance < totalCost) return s;
 
-  const map = getMap(s.round);
   let next: GameState = {
     ...s,
     balance: s.balance - totalCost,
@@ -346,16 +405,17 @@ function tickEasterEggs(s: GameState, rng: () => number): GameState {
 
 // ---- fundraise ----
 
+export function completedRoundIdx(s: GameState): number {
+  if (s.round === "pre-seed") return -1;
+  return FUNDRAISE_ROUNDS.findIndex((r) => r.id === s.round);
+}
+
 export function canFundraise(s: GameState, idx: number): { ok: boolean; reason?: string } {
   const def = FUNDRAISE_ROUNDS[idx];
   if (!def) return { ok: false, reason: "No round" };
-  const roundOrder: RoundId[] = ["pre-seed", "seed", "series-a", "series-b"];
-  if (roundOrder.indexOf(s.round) > roundOrder.indexOf(def.roundAfter)) {
-    return { ok: false, reason: "Already raised" };
-  }
-  if (roundOrder.indexOf(s.round) >= roundOrder.indexOf(def.roundAfter)) {
-    return { ok: false, reason: "Already closed this round" };
-  }
+  const completed = completedRoundIdx(s);
+  if (idx <= completed) return { ok: false, reason: "Already raised" };
+  if (idx > completed + 1) return { ok: false, reason: "Close prior round first" };
   if (s.employees.length < def.minEmployees) {
     return { ok: false, reason: `Need ${def.minEmployees} employees` };
   }
@@ -430,12 +490,14 @@ export function tick(s: GameState): GameState {
   // Morale drift toward baseline 70; gentle decay if no coffee in 5 weeks.
   // Already-quitting employees do NOT drift back up — only rescue clears the flag.
   const sinceCoffee = next.week - next.lastInteractionWeek;
+  const imbalance = computeImbalance(next);
   next.employees = next.employees.map((e) => {
     let m = e.morale;
     if (e.quittingSinceTick === null) {
       const toward = MORALE_BASELINE;
       m += (toward - m) * 0.08;
       if (sinceCoffee > 5) m -= 1.5;
+      if (imbalance.penalty > 0) m -= imbalance.penalty;
     } else {
       // Yellow employees slide further toward the exit each tick.
       m -= 2;
@@ -447,6 +509,18 @@ export function tick(s: GameState): GameState {
     }
     return { ...e, morale: clamped, quittingSinceTick };
   });
+
+  if (
+    imbalance.penalty > 0 &&
+    imbalance.dominant &&
+    next.week % TEAM_IMBALANCE_LOG_INTERVAL === 0
+  ) {
+    pushLog(next, {
+      week: next.week,
+      message: `Team feels lopsided — ${Math.round(imbalance.share * 100)}% ${CATEGORY_LABEL[imbalance.dominant]}. Morale drifting down.`,
+      tone: "bad",
+    });
+  }
 
   // Process quitters: anyone who has been yellow past the deadline walks.
   const quitters: Employee[] = [];

@@ -1,6 +1,6 @@
 import type { LocationId, RoleCategory } from "./constants";
 
-export type RoundId = "pre-seed" | "seed" | "series-a" | "series-b";
+export type RoundId = "pre-seed" | "seed" | `series-${string}`;
 
 export type RoleId =
   | "junior_eng"

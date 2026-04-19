@@ -9,6 +9,7 @@ import {
 } from "@/lib/game/constants";
 import { useActions, useGameStore } from "@/lib/game/store";
 import { calcHireCost, headcountByRole } from "@/lib/game/valuation";
+import { getMap, officeCapacity } from "@/lib/game/map";
 import { ModalShell } from "./ModalShell";
 import { useHireSound } from "@/lib/game/sounds";
 
@@ -19,11 +20,15 @@ export function HireModal() {
   const actions = useActions();
   const balance = useGameStore((s) => s.balance);
   const employees = useGameStore((s) => s.employees);
+  const round = useGameStore((s) => s.round);
   const [location, setLocation] = useState<LocationId>("SF");
   const [qtyByRole, setQtyByRole] = useState<Record<string, number>>({});
   const playHire = useHireSound();
 
   const counts = useMemo(() => headcountByRole(employees), [employees]);
+  const capacity = useMemo(() => officeCapacity(getMap(round)), [round]);
+  const freeSeats = Math.max(0, capacity - employees.length);
+  const officeFull = freeSeats <= 0;
 
   const setQty = (roleId: string, q: number) =>
     setQtyByRole((prev) => ({
@@ -33,6 +38,24 @@ export function HireModal() {
 
   return (
     <ModalShell title="HIRE SHOP" wide onClose={actions.closeModal}>
+      <div
+        className={`mb-3 text-xs flex items-center justify-between rounded border px-3 py-1.5 ${
+          officeFull
+            ? "border-rose-700/60 bg-rose-950/30 text-rose-200"
+            : "border-slate-700 bg-slate-950/40 text-slate-300"
+        }`}
+      >
+        <span>
+          Desks: <span className="tabular-nums text-slate-100">{employees.length}</span>
+          <span className="text-slate-500"> / </span>
+          <span className="tabular-nums text-slate-100">{capacity}</span>
+        </span>
+        <span className="text-[10px] uppercase tracking-wider">
+          {officeFull
+            ? "Office is full — raise a round to expand"
+            : `${freeSeats} free desk${freeSeats === 1 ? "" : "s"}`}
+        </span>
+      </div>
       <div className="flex gap-2 mb-4">
         {LOCATIONS.map((loc) => (
           <button
@@ -64,7 +87,8 @@ export function HireModal() {
           const nextCost = nextBreakdown?.total ?? 0;
           const totalCost = breakdown?.total ?? 0;
           const unaffordable = balance < totalCost;
-          const disabled = role.disabled || unaffordable;
+          const overCapacity = !role.disabled && qty > freeSeats;
+          const disabled = role.disabled || unaffordable || overCapacity;
           const hasPremium = existing > 0 || qty > 1;
           return (
             <div
@@ -168,7 +192,11 @@ export function HireModal() {
                       disabled={disabled}
                       className="flex-1 py-1 rounded bg-emerald-600 text-slate-950 text-sm font-bold hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      {unaffordable
+                      {officeFull
+                        ? "OFFICE FULL"
+                        : overCapacity
+                        ? `ONLY ${freeSeats} DESK${freeSeats === 1 ? "" : "S"} LEFT`
+                        : unaffordable
                         ? "CAN'T AFFORD"
                         : `HIRE ×${qty} · $${totalCost.toLocaleString()}`}
                     </button>

@@ -422,6 +422,244 @@ export const EVENTS: GameEventDef[] = [
       }));
     },
   },
+  // ---- Big Tech raids ----
+  // FAANG-style poaching events. Unlike eng_poached (1 person), these scale
+  // with how deep you are in a given role and can wipe out a chunk of the team
+  // if you don't counter. Gated to later weeks so they only land once the
+  // player has a real team to lose.
+  {
+    id: "amazon_senior_raid",
+    weight: 3,
+    minWeek: 14,
+    condition: (s) => countRole(s, "senior_eng") >= 5,
+    weightScale: (s) => 1 + countRole(s, "senior_eng") * 0.15,
+    message: "Amazon opened a recruiting blitz against your senior engineers.",
+    tone: "bad",
+    choice: {
+      title: "Amazon is buying out your senior engineers",
+      options: [
+        {
+          key: "counter",
+          label: "Counter with retention packages",
+          description:
+            "Match the offers. Costs ~$60k per senior engineer. Keeps the team intact and bumps eng morale.",
+        },
+        {
+          key: "let_go",
+          label: "Let them walk",
+          description:
+            "Lose half your senior engineers. Team-wide morale crater.",
+        },
+      ],
+      resolve: {
+        counter: (s) => {
+          const n = countRole(s, "senior_eng");
+          s.balance -= n * 60_000;
+          s.employees = s.employees.map((e) =>
+            e.role.category === "engineering"
+              ? { ...e, morale: Math.min(100, e.morale + 5) }
+              : e,
+          );
+        },
+        let_go: (s) => {
+          const total = countRole(s, "senior_eng");
+          const toLose = Math.max(1, Math.ceil(total / 2));
+          let removed = 0;
+          s.employees = s.employees.filter((e) => {
+            if (removed < toLose && e.role.id === "senior_eng") {
+              removed++;
+              return false;
+            }
+            return true;
+          });
+          s.employees = s.employees.map((e) => ({
+            ...e,
+            morale: Math.max(0, e.morale - 15),
+          }));
+        },
+      },
+    },
+  },
+  {
+    id: "google_designer_raid",
+    weight: 2,
+    minWeek: 12,
+    condition: (s) => countRole(s, "designer") >= 3,
+    weightScale: (s) => 1 + countRole(s, "designer") * 0.2,
+    message: "Google Design is cold-emailing every designer on your team.",
+    tone: "bad",
+    choice: {
+      title: "Google is poaching your designers",
+      options: [
+        {
+          key: "counter",
+          label: "Equity refresh ($45k each)",
+          description: "Keep them all. Design morale gets a lift.",
+        },
+        {
+          key: "let_go",
+          label: "Let them walk",
+          description: "Lose a third of your designers. Morale hit.",
+        },
+      ],
+      resolve: {
+        counter: (s) => {
+          const n = countRole(s, "designer");
+          s.balance -= n * 45_000;
+          s.employees = s.employees.map((e) =>
+            e.role.id === "designer"
+              ? { ...e, morale: Math.min(100, e.morale + 6) }
+              : e,
+          );
+        },
+        let_go: (s) => {
+          const total = countRole(s, "designer");
+          const toLose = Math.max(1, Math.ceil(total / 3));
+          let removed = 0;
+          s.employees = s.employees.filter((e) => {
+            if (removed < toLose && e.role.id === "designer") {
+              removed++;
+              return false;
+            }
+            return true;
+          });
+          s.employees = s.employees.map((e) => ({
+            ...e,
+            morale: Math.max(0, e.morale - 10),
+          }));
+        },
+      },
+    },
+  },
+  {
+    id: "stripe_sales_raid",
+    weight: 2,
+    minWeek: 14,
+    condition: (s) => countRole(s, "sales") >= 4,
+    weightScale: (s) => 1 + countRole(s, "sales") * 0.2,
+    message: "Stripe's recruiters are dangling big OTE at your AEs.",
+    tone: "bad",
+    choice: {
+      title: "Stripe is raiding your sales floor",
+      options: [
+        {
+          key: "counter",
+          label: "Boost commissions ($30k each)",
+          description: "Keep your AEs. Sales morale up.",
+        },
+        {
+          key: "let_go",
+          label: "Let them walk",
+          description:
+            "Lose a third of your AEs. MRR takes a hit next tick. Morale drops.",
+        },
+      ],
+      resolve: {
+        counter: (s) => {
+          const n = countRole(s, "sales");
+          s.balance -= n * 30_000;
+          s.employees = s.employees.map((e) =>
+            e.role.id === "sales"
+              ? { ...e, morale: Math.min(100, e.morale + 5) }
+              : e,
+          );
+        },
+        let_go: (s) => {
+          const total = countRole(s, "sales");
+          const toLose = Math.max(1, Math.ceil(total / 3));
+          let removed = 0;
+          s.employees = s.employees.filter((e) => {
+            if (removed < toLose && e.role.id === "sales") {
+              removed++;
+              return false;
+            }
+            return true;
+          });
+          s.employees = s.employees.map((e) => ({
+            ...e,
+            morale: Math.max(0, e.morale - 10),
+          }));
+        },
+      },
+    },
+  },
+  {
+    id: "meta_marketer_raid",
+    weight: 2,
+    minWeek: 12,
+    condition: (s) => countRole(s, "marketer") >= 3,
+    weightScale: (s) => 1 + countRole(s, "marketer") * 0.2,
+    message: "Meta's growth team is spamming LinkedIn InMails at your marketers.",
+    tone: "bad",
+    choice: {
+      title: "Meta is poaching your marketing team",
+      options: [
+        {
+          key: "counter",
+          label: "Grant RSUs ($25k each)",
+          description: "Keep them. Marketing morale up.",
+        },
+        {
+          key: "let_go",
+          label: "Let them walk",
+          description: "Lose a third of your marketers. Morale drops.",
+        },
+      ],
+      resolve: {
+        counter: (s) => {
+          const n = countRole(s, "marketer");
+          s.balance -= n * 25_000;
+          s.employees = s.employees.map((e) =>
+            e.role.id === "marketer"
+              ? { ...e, morale: Math.min(100, e.morale + 5) }
+              : e,
+          );
+        },
+        let_go: (s) => {
+          const total = countRole(s, "marketer");
+          const toLose = Math.max(1, Math.ceil(total / 3));
+          let removed = 0;
+          s.employees = s.employees.filter((e) => {
+            if (removed < toLose && e.role.id === "marketer") {
+              removed++;
+              return false;
+            }
+            return true;
+          });
+          s.employees = s.employees.map((e) => ({
+            ...e,
+            morale: Math.max(0, e.morale - 8),
+          }));
+        },
+      },
+    },
+  },
+  // Uncontested mass exodus — no choice, hurts. Rare and late-game only.
+  {
+    id: "openai_engineering_exodus",
+    weight: 1,
+    minWeek: 24,
+    condition: (s) => countCategory(s, "engineering") >= 10,
+    message:
+      "OpenAI signed 20% of your engineering org before you even heard about it. No counter.",
+    tone: "bad",
+    effect: (s) => {
+      const engs = s.employees.filter((e) => e.role.category === "engineering");
+      const toLose = Math.max(1, Math.round(engs.length * 0.2));
+      let removed = 0;
+      s.employees = s.employees.filter((e) => {
+        if (removed < toLose && e.role.category === "engineering") {
+          removed++;
+          return false;
+        }
+        return true;
+      });
+      s.employees = s.employees.map((e) => ({
+        ...e,
+        morale: Math.max(0, e.morale - 12),
+      }));
+    },
+  },
   {
     id: "eng_poached",
     weight: 3,

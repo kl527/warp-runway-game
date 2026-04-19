@@ -480,7 +480,7 @@ const SERIES_B: MapSpec = {
   ],
 };
 
-export const MAPS: Record<RoundId, MapDef> = {
+export const MAPS: Record<string, MapDef> = {
   "pre-seed": buildMap("pre-seed", PRE_SEED),
   seed: buildMap("seed", SEED),
   "series-a": buildMap("series-a", SERIES_A),
@@ -493,7 +493,7 @@ export const MAX_MAP_W = Math.max(...Object.values(MAPS).map((m) => m.width));
 export const MAX_MAP_H = Math.max(...Object.values(MAPS).map((m) => m.height));
 
 export function getMap(round: RoundId): MapDef {
-  return MAPS[round];
+  return MAPS[round] ?? MAPS["series-b"];
 }
 
 export function charAt(map: MapDef, x: number, y: number): string {
@@ -523,6 +523,20 @@ export function isBuildingDoor(
 export function inOffice(map: MapDef, x: number, y: number): boolean {
   const b = map.officeBounds;
   return x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1;
+}
+
+// Number of walkable tiles inside the office bounds. This is the hard cap on
+// how many employees the current map can house — a new hire needs a free
+// tile to land on.
+export function officeCapacity(map: MapDef): number {
+  const b = map.officeBounds;
+  let count = 0;
+  for (let y = b.y0; y <= b.y1; y++) {
+    for (let x = b.x0; x <= b.x1; x++) {
+      if (isWalkable(map, x, y)) count++;
+    }
+  }
+  return count;
 }
 
 export function cellKey(x: number, y: number): string {

@@ -2,7 +2,7 @@
 
 import { FUNDRAISE_ROUNDS } from "@/lib/game/constants";
 import { useActions, useGameStore } from "@/lib/game/store";
-import { canFundraise } from "@/lib/game/logic";
+import { canFundraise, completedRoundIdx } from "@/lib/game/logic";
 import { ModalShell } from "./ModalShell";
 import { useShallow } from "zustand/react/shallow";
 import { useCashSound } from "@/lib/game/sounds";
@@ -20,10 +20,16 @@ export function FundraiseModal() {
   const fullState = useGameStore.getState();
   const playCash = useCashSound();
 
+  const completed = completedRoundIdx(fullState);
+  const startIdx = completed + 1;
+  const visibleRounds = FUNDRAISE_ROUNDS.slice(startIdx, startIdx + 3).map(
+    (round, offset) => ({ round, idx: startIdx + offset }),
+  );
+
   return (
     <ModalShell title="VC OFFICE" wide onClose={actions.closeModal}>
       <div className="space-y-3">
-        {FUNDRAISE_ROUNDS.map((round, idx) => {
+        {visibleRounds.map(({ round, idx }) => {
           const gate = canFundraise(fullState, idx);
           return (
             <div
