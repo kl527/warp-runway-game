@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #020617;
+  color: #e2e8f0;
+}
+
+.game-grid {
+  display: grid;
+  grid-template-columns: repeat(60, 1ch);
+  grid-template-rows: repeat(20, 1em);
+  line-height: 1;
+  letter-spacing: 0;
+  user-select: none;
+}
+
+.game-grid > span {
+  display: block;
+  text-align: center;
+  transition: color 150ms linear;
+}
