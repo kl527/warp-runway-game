@@ -109,9 +109,8 @@ export function EndScreen() {
 
   if (!state.gameOver) return null;
 
-  const shareUrlOrigin =
+  const playUrl =
     typeof window !== "undefined" ? window.location.origin : "";
-  const playUrl = `${shareUrlOrigin}/play`;
 
   const balAbs = Math.abs(state.balance);
   const balStr =
