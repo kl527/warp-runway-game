@@ -152,6 +152,10 @@ export const EASTER_EGG_CHAR = "◆";
 
 export const WARP_URL = "https://www.warp.co";
 export const WARP_SIMULATOR_URL = "https://www.warp.co/simulator";
+// Newsletter iframe source. Swap providers (Substack / Beehiiv / custom) by
+// editing this line — the modal component reads the URL straight through.
+export const WARP_NEWSLETTER_EMBED_URL = "https://substack.com/@daniel457461/embed";
+export const WARP_NEWSLETTER_URL = "https://substack.com/@daniel457461";
 
 export interface FundraiseRound {
   id: RoundId;

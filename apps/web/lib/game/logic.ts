@@ -133,6 +133,7 @@ export function initialState(): GameState {
     purchases: [],
     shopOffer: initialOffer,
     buildingEggSeen: false,
+    newsletterSeen: false,
   };
 }
 
@@ -266,32 +267,42 @@ export function move(s: GameState, dx: number, dy: number): GameState {
   return checkBuildingEgg(next, nx, ny);
 }
 
-// Hidden easter egg: once the player reaches Series A, brushing up against
-// one of the new decor buildings (lab/lounge/all-hands) pops a Warp discount
-// offer modal. Fires at most once per run.
+// Hidden building eggs: brushing up against a decor building pops a modal.
+// - LOUNGE (Seed onward) → newsletter embed, once per run.
+// - LAB / ALL-HANDS (Series A+) → existing discount-code egg, once per run.
+// Flags are independent so both modals can fire during a single playthrough.
 function checkBuildingEgg(s: GameState, x: number, y: number): GameState {
-  if (s.buildingEggSeen || s.modal) return s;
-  if (!s.round.startsWith("series-")) return s;
+  if (s.modal) return s;
   const rects = getRoomRects(s.round);
-  let hit = false;
+  let newsletterHit = false;
+  let eggHit = false;
   for (const r of rects) {
     if (r.kind !== "lab" && r.kind !== "lounge" && r.kind !== "allhands") continue;
     const inBox = x >= r.x - 1 && x <= r.x + r.w && y >= r.y - 1 && y <= r.y + r.h;
     if (!inBox) continue;
     const strictlyInside =
       x > r.x && x < r.x + r.w - 1 && y > r.y && y < r.y + r.h - 1;
-    if (!strictlyInside) {
-      hit = true;
-      break;
-    }
+    if (strictlyInside) continue;
+    if (r.kind === "lounge") newsletterHit = true;
+    else eggHit = true;
   }
-  if (!hit) return s;
-  return {
-    ...s,
-    buildingEggSeen: true,
-    modal: { kind: "building_egg" },
-    paused: true,
-  };
+  if (newsletterHit && !s.newsletterSeen) {
+    return {
+      ...s,
+      newsletterSeen: true,
+      modal: { kind: "newsletter" },
+      paused: true,
+    };
+  }
+  if (eggHit && !s.buildingEggSeen && s.round.startsWith("series-")) {
+    return {
+      ...s,
+      buildingEggSeen: true,
+      modal: { kind: "building_egg" },
+      paused: true,
+    };
+  }
+  return s;
 }
 
 function rescueAt(s: GameState, x: number, y: number): GameState {

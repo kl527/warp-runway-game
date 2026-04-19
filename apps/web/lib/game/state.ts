@@ -70,7 +70,8 @@ export type ModalKind =
   | "choice"
   | "ai_critic"
   | "ai_pitch"
-  | "building_egg";
+  | "building_egg"
+  | "newsletter";
 
 export interface ChoiceOption {
   key: string;
@@ -149,4 +150,7 @@ export interface GameState {
   // One-shot hidden egg: fires when the player steps up to a newer decor
   // building (lab/lounge/all-hands) once they've reached Series A or beyond.
   buildingEggSeen: boolean;
+  // One-shot newsletter embed: fires when the player brushes the LOUNGE
+  // decor room. Independent of buildingEggSeen so both can trigger per run.
+  newsletterSeen: boolean;
 }
