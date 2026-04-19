@@ -7,6 +7,7 @@ import {
   initialState,
   interact as pureInteract,
   move as pureMove,
+  openAiCritic as pureOpenAiCritic,
   resolveChoice as pureResolveChoice,
   setSpeed as pureSetSpeed,
   tick as pureTick,
@@ -24,6 +25,7 @@ export interface GameActions {
   setSpeed: (speed: 1 | 2 | 4) => void;
   closeModal: () => void;
   resolveChoice: (choiceKey: string) => void;
+  openAiCritic: (critique: string) => void;
   reset: () => void;
 }
 
@@ -41,6 +43,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     setSpeed: (speed) => set((s) => pureSetSpeed(s, speed)),
     closeModal: () => set((s) => pureCloseModal(s)),
     resolveChoice: (key) => set((s) => pureResolveChoice(s, key)),
+    openAiCritic: (critique) => set((s) => pureOpenAiCritic(s, critique)),
     reset: () => set(() => ({ ...initialState(), actions: get().actions })),
   },
 }));

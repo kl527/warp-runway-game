@@ -39,12 +39,12 @@ export function EndScreen() {
   );
 
   const val = valuation({ revenuePerWeek: state.revenue });
-  const isIPO = state.gameOver === "ipo";
+  const isUnicorn = state.gameOver === "unicorn";
   const epi = epitaph(state.week, state.peakHeadcount, state.balance);
 
   useEffect(() => {
     if (!state.gameOver) return;
-    if (isIPO) {
+    if (isUnicorn) {
       playLevelUp();
       if (!confettiFired.current) {
         confettiFired.current = true;
@@ -62,17 +62,17 @@ export function EndScreen() {
     } else {
       playDeath();
     }
-  }, [state.gameOver, isIPO, playDeath, playLevelUp]);
+  }, [state.gameOver, isUnicorn, playDeath, playLevelUp]);
 
   if (!state.gameOver) return null;
 
-  const shareText = isIPO
-    ? `I IPO'd on Warp Runway at week ${state.week}. ${state.peakHeadcount} people. Try it:`
+  const shareText = isUnicorn
+    ? `I became a Unicorn on Warp Runway at week ${state.week}. ${state.peakHeadcount} people. Try it:`
     : `${epi} Try surviving yourself:`;
   const shareUrlOrigin =
     typeof window !== "undefined" ? window.location.origin : "";
   const ogParams = new URLSearchParams({
-    mode: isIPO ? "ipo" : "burned",
+    mode: isUnicorn ? "unicorn" : "burned",
     w: String(state.week),
     h: String(state.peakHeadcount),
     b: String(state.balance),
@@ -113,23 +113,22 @@ export function EndScreen() {
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/95 flex items-center justify-center p-8 overflow-auto">
       <div className="max-w-2xl w-full space-y-6">
-        {isIPO ? (
+        {isUnicorn ? (
           <div className="text-center">
-            <pre className="text-emerald-400 text-sm leading-tight">
+            <pre className="text-fuchsia-400 text-sm leading-tight">
 {String.raw`
-  _____ _____   ____  _
- |_   _|  _  \ / __ \| |
-   | | | |_) | |  | | |
-   | | |  __/| |  | |_|
-  _| |_| |   | |__| (_)
- |_____|_|    \____/
+  _   _ _   _ ___ ____ ___  ____  _   _ _
+ | | | | \ | |_ _/ ___/ _ \|  _ \| \ | | |
+ | | | |  \| || | |  | | | | |_) |  \| | |
+ | |_| | |\  || | |__| |_| |  _ <| |\  |_|
+  \___/|_| \_|___\____\___/|_| \_\_| \_(_)
 `}
             </pre>
-            <h1 className="text-3xl font-bold text-emerald-300 mt-4">
-              You IPO'd at week {state.week}.
+            <h1 className="text-3xl font-bold text-fuchsia-300 mt-4">
+              You became a Unicorn at week {state.week}.
             </h1>
             <p className="text-slate-400 mt-2">
-              Valuation: ${(val / 1_000_000).toFixed(1)}M. Ring the bell.
+              Valuation: ${(val / 1_000_000_000).toFixed(2)}B. Mythical status unlocked.
             </p>
           </div>
         ) : (

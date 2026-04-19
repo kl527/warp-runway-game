@@ -6,10 +6,11 @@ export const EVENT_PROBABILITY = 0.2;
 export const SHUFFLE_EVERY_TICKS = 2;
 export const MAX_LOG_ENTRIES = 40;
 export const VISIBLE_LOG_ENTRIES = 4;
-export const IPO_VALUATION = 50_000_000;
+export const UNICORN_VALUATION = 1_000_000_000;
 export const VALUATION_MULTIPLIER = 10;
 export const COFFEE_MORALE_BOOST = 10;
 export const MORALE_BASELINE = 70;
+export const CRITIC_INTERVAL_WEEKS = 8;
 
 export const WARP_URL = "https://www.warp.co";
 export const WARP_SIMULATOR_URL = "https://www.warp.co/simulator";

@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useActions, useGameStore } from "@/lib/game/store";
-import { TICK_MS } from "@/lib/game/constants";
+import { CRITIC_INTERVAL_WEEKS, TICK_MS } from "@/lib/game/constants";
 import {
   selectGameOver,
   selectModal,
   selectPaused,
   selectSpeed,
 } from "@/lib/game/selectors";
+import { buildDigest } from "@/lib/ai/buildDigest";
 import { GameCanvas } from "./GameCanvas";
 import { HUD } from "./HUD";
 import { EventLog } from "./EventLog";
@@ -17,6 +18,7 @@ import { HireModal } from "./modals/HireModal";
 import { FundraiseModal } from "./modals/FundraiseModal";
 import { DashboardOverlay } from "./modals/DashboardOverlay";
 import { ChoiceModal } from "./modals/ChoiceModal";
+import { AiCriticModal } from "./modals/AiCriticModal";
 import { EndScreen } from "./EndScreen";
 import { MobileBlock } from "./MobileBlock";
 
@@ -37,7 +39,46 @@ export function GameShell() {
   const modal = useGameStore(selectModal);
   const gameOver = useGameStore(selectGameOver);
   const speed = useGameStore(selectSpeed);
+  const week = useGameStore((s) => s.week);
   const narrow = useIsMobile();
+  const lastCritiqueWeek = useRef(0);
+  const critiqueInFlight = useRef(false);
+
+  useEffect(() => {
+    if (gameOver || modal || paused) return;
+    if (week === 0) return;
+    if (week - lastCritiqueWeek.current < CRITIC_INTERVAL_WEEKS) return;
+    if (critiqueInFlight.current) return;
+
+    lastCritiqueWeek.current = week;
+    critiqueInFlight.current = true;
+    const ac = new AbortController();
+    const snapshot = useGameStore.getState();
+    const digest = buildDigest(snapshot).text;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/ai/critique", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ digest }),
+          signal: ac.signal,
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { critique?: string };
+        if (!data.critique) return;
+        actions.openAiCritic(data.critique);
+      } catch (err) {
+        if ((err as { name?: string }).name !== "AbortError") {
+          console.warn("critique fetch failed", err);
+        }
+      } finally {
+        critiqueInFlight.current = false;
+      }
+    })();
+
+    return () => ac.abort();
+  }, [week, gameOver, modal, paused, actions]);
 
   // Keyboard.
   useEffect(() => {
@@ -111,6 +152,7 @@ export function GameShell() {
         {modal?.kind === "fundraise" && <FundraiseModal key="fund" />}
         {modal?.kind === "dashboard" && <DashboardOverlay key="dash" />}
         {modal?.kind === "choice" && <ChoiceModal key="choice" />}
+        {modal?.kind === "ai_critic" && <AiCriticModal key="aicritic" />}
       </AnimatePresence>
       {gameOver && <EndScreen />}
     </main>

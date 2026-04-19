@@ -51,7 +51,7 @@ export interface CapTable {
   investors: { round: string; pct: number }[];
 }
 
-export type ModalKind = "hire" | "fundraise" | "dashboard" | "choice";
+export type ModalKind = "hire" | "fundraise" | "dashboard" | "choice" | "ai_critic";
 
 export interface ChoiceOption {
   key: string;
@@ -66,6 +66,7 @@ export interface ModalState {
     options?: ChoiceOption[];
     title?: string;
     body?: string;
+    critique?: string;
   };
 }
 
@@ -89,7 +90,7 @@ export interface GameState {
   eventLog: LogEntry[];
   paused: boolean;
   speed: 1 | 2 | 4;
-  gameOver: "burned" | "ipo" | null;
+  gameOver: "burned" | "unicorn" | null;
   position: { x: number; y: number };
   modal: ModalState | null;
   peakHeadcount: number;

@@ -11,7 +11,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Warp Runway: Startup Survival",
   description:
-    "Keyboard-driven ASCII startup simulator. Survive the burn, hit the IPO, or die trying.",
+    "Keyboard-driven ASCII startup simulator. Survive the burn, become a unicorn, or die trying.",
 };
 
 export default function RootLayout({

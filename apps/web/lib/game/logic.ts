@@ -2,7 +2,7 @@ import {
   COFFEE_MORALE_BOOST,
   EVENT_PROBABILITY,
   FUNDRAISE_ROUNDS,
-  IPO_VALUATION,
+  UNICORN_VALUATION,
   LOCATION_MULTIPLIERS,
   MAX_LOG_ENTRIES,
   MORALE_BASELINE,
@@ -324,11 +324,11 @@ export function tick(s: GameState): GameState {
       message: "Ran out of money. Game over.",
       tone: "bad",
     });
-  } else if (valuation(next) >= IPO_VALUATION) {
-    next.gameOver = "ipo";
+  } else if (valuation(next) >= UNICORN_VALUATION) {
+    next.gameOver = "unicorn";
     pushLog(next, {
       week: next.week,
-      message: "IPO! You hit a $50M valuation. Ring the bell.",
+      message: "Unicorn! You hit a $1B valuation.",
       tone: "good",
     });
   }
@@ -423,6 +423,15 @@ export function closeModal(s: GameState): GameState {
   if (!s.modal) return s;
   if (s.modal.kind === "choice") return s; // choice must be resolved
   return { ...s, modal: null, paused: false };
+}
+
+export function openAiCritic(s: GameState, critique: string): GameState {
+  if (s.gameOver || s.modal) return s;
+  return {
+    ...s,
+    modal: { kind: "ai_critic", payload: { critique } },
+    paused: true,
+  };
 }
 
 export function togglePause(s: GameState): GameState {

@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function Home() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center gap-8 p-8">
-      <pre className="text-emerald-400 text-[10px] sm:text-xs md:text-sm leading-none tracking-tight">
+      <pre className="font-mono text-emerald-400 text-[10px] sm:text-xs md:text-sm leading-tight">
 {` ██╗    ██╗  █████╗  ██████╗  ██████╗
  ██║    ██║ ██╔══██╗ ██╔══██╗ ██╔══██╗
  ██║ █╗ ██║ ███████║ ██████╔╝ ██████╔╝
@@ -13,7 +13,7 @@ export default function Home() {
             R U N W A Y   G A M E`}
       </pre>
       <p className="max-w-xl text-center text-slate-400">
-        Runway burning, VCs calling, coffee machine beckoning.
+        Become a Unicorn.
       </p>
       <Link
         href="/play"
