@@ -1,8 +1,6 @@
 import { NextRequest } from "next/server";
 import satori from "satori";
 
-export const runtime = "edge";
-
 // Fontsource mirror is stable and serves woff directly (no User-Agent gating
 // like fonts.gstatic.com). We use Inter rather than JetBrains Mono here
 // because OG cards read better in a proportional face.

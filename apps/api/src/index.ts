@@ -31,7 +31,7 @@ function sanitizeHandle(raw: unknown): string | null {
 
 app.get("/leaderboard", async (c) => {
   const rows = await c.env.DB.prepare(
-    "SELECT handle, weeks_survived, peak_headcount, final_valuation, created_at FROM leaderboard ORDER BY weeks_survived DESC, final_valuation DESC LIMIT 20"
+    "SELECT handle, weeks_survived, peak_headcount, final_valuation, created_at FROM leaderboard ORDER BY peak_headcount DESC, final_valuation DESC LIMIT 20"
   ).all();
   const body: LeaderboardListResponse = {
     rows: (rows.results ?? []) as LeaderboardListResponse["rows"],

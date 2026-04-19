@@ -220,6 +220,17 @@ export function itemById(id: string): ShopItem | undefined {
   return SHOP_ITEMS.find((i) => i.id === id);
 }
 
+// A consumable has only one-shot effects (morale, board, cash). Nothing
+// recurring to track on ownedItems, so it can be re-bought freely.
+export function isConsumable(item: ShopItem): boolean {
+  const eff = item.effect;
+  const hasRecurring =
+    !!eff.revenueDelta || !!eff.revenueMultBonus || !!eff.burnDelta;
+  const hasOneShot =
+    !!eff.moraleBoost || !!eff.boardConfidenceBoost || !!eff.cashGrant;
+  return !hasRecurring && hasOneShot;
+}
+
 // Price scales with round — later rounds get more expensive drops, since the
 // player has bigger checks to spend.
 export function priceForRound(item: ShopItem, roundIdx: number): number {

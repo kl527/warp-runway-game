@@ -5,8 +5,6 @@ import { createWorkersAI } from "workers-ai-provider";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { VC_VERDICT_SYSTEM, VC_VERDICT_USER } from "@/lib/ai/prompts";
 
-export const runtime = "edge";
-
 const bodySchema = z.object({
   roundLabel: z.string().min(1).max(64),
   question: z.string().min(1).max(2000),

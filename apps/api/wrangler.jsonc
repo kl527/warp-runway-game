@@ -1,20 +1,22 @@
 {
-  "$schema": "../../node_modules/wrangler/config-schema.json",
-  "name": "warp-runway-game-api",
-  "main": "src/index.ts",
-  "compatibility_date": "2025-01-01",
-  "compatibility_flags": ["nodejs_compat"],
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "warp-runway-game",
-      "database_id": "REPLACE_WITH_YOUR_D1_ID"
-    }
-  ],
-  "observability": {
-    "enabled": true
-  },
-  "vars": {
-    "ALLOWED_ORIGIN": "http://localhost:3000"
-  }
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	"name": "warp-runway-game-api",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-01-01",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "warp-runway-game",
+			"database_id": "c78953fa-80e3-498f-84b0-6ba951ebb675"
+		}
+	],
+	"observability": {
+		"enabled": true
+	},
+	"vars": {
+		"ALLOWED_ORIGIN": "https://warp-runway-game-web.leed4219.workers.dev"
+	}
 }

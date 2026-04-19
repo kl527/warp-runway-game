@@ -2,6 +2,8 @@
 
 A keyboard-driven ASCII startup simulator. Survive the burn, hit the IPO, or die trying.
 
+**Play it:** https://warp-runway-game-web.leed4219.workers.dev
+
 ## Tech stack
 
 ### Frontend (`apps/web/`)

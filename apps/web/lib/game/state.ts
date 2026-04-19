@@ -135,6 +135,9 @@ export interface GameState {
   // Items purchased from the HIRE shop. Effects fold into revenue/burn
   // recomputes each tick, and one-shot bonuses apply at purchase time.
   ownedItems: string[];
+  // Every shop purchase made this run, including consumables. Price is the
+  // round-scaled amount actually paid — powers the end-of-run share receipt.
+  purchases: { itemId: string; price: number; week: number }[];
   // Current shop offer, rolled at the start of the run and refreshed each
   // time a round closes. Null between the purchase-all moment and the next
   // round close (rare).

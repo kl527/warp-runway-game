@@ -5,8 +5,6 @@ import { createWorkersAI } from "workers-ai-provider";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { VC_PARTNER_SYSTEM, VC_QUESTION_USER } from "@/lib/ai/prompts";
 
-export const runtime = "edge";
-
 const bodySchema = z.object({
   digest: z.string().min(1).max(4000),
   roundLabel: z.string().min(1).max(64),

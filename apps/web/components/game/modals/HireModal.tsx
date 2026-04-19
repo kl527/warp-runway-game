@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ROLES } from "@/lib/game/roles";
 import { LOCATION_MULTIPLIERS, type LocationId } from "@/lib/game/constants";
 import { useActions, useGameStore } from "@/lib/game/store";
 import { calcHireCost, headcountByRole } from "@/lib/game/valuation";
 import { getMap, officeCapacity } from "@/lib/game/map";
 import {
+  isConsumable,
   itemById,
   type ItemEffect,
   type ItemRarity,
@@ -96,23 +97,34 @@ export function HireModal() {
               }`}
             >
               {role.disabled ? (
-                <div className="flex items-center gap-2 text-[11px] min-h-[44px]">
-                  <span className="font-bold text-cyan-300">{role.char}</span>
-                  <span className="font-bold text-slate-100">{role.name}</span>
-                  <span className="text-warp-amber-9 truncate">
-                    {role.disabledTooltip}
-                  </span>
-                  {role.disabledUrl && (
-                    <a
-                      href={role.disabledUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ml-auto underline text-warp-amber-8 hover:text-warp-amber-9 shrink-0"
-                    >
-                      warp.co
-                    </a>
-                  )}
-                </div>
+                <>
+                  <div className="flex items-center gap-2 text-[11px] leading-tight mb-1 min-w-0">
+                    <span className="font-bold text-warp-amber-8 shrink-0">
+                      {role.char}
+                    </span>
+                    <span className="font-bold text-slate-100 shrink-0">
+                      {role.name}
+                    </span>
+                    <span className="ml-auto font-brand text-[9px] uppercase tracking-[0.14em] px-1 py-[1px] rounded text-warp-amber-8 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.35)] shrink-0">
+                      Handled by Warp
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] min-w-0">
+                    <span className="text-warp-amber-9 truncate min-w-0">
+                      {role.disabledTooltip}
+                    </span>
+                    {role.disabledUrl && (
+                      <a
+                        href={role.disabledUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-auto shrink-0 px-2.5 py-1 rounded text-[11px] font-medium text-warp-amber-8 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.35)] hover:bg-warp-amber-9/10 transition whitespace-nowrap"
+                      >
+                        warp.co →
+                      </a>
+                    )}
+                  </div>
+                </>
               ) : (
                 <>
                   <div className="flex items-center gap-2 text-[11px] leading-tight mb-1 min-w-0">
@@ -219,15 +231,52 @@ function ShopSection({
   onBuy: (id: string) => void;
 }) {
   const ownedCount = ownedItems.length;
-  const offerItems = shopOffer
-    ? shopOffer.itemIds
-        .map((id, i) => {
-          const item = itemById(id);
-          if (!item) return null;
-          return { item, price: shopOffer.prices[i] };
-        })
-        .filter((x): x is { item: ShopItem; price: number } => x !== null)
-    : [];
+  const offerItems = useMemo(
+    () =>
+      shopOffer
+        ? shopOffer.itemIds
+            .map((id, i) => {
+              const item = itemById(id);
+              if (!item) return null;
+              return { item, price: shopOffer.prices[i] };
+            })
+            .filter((x): x is { item: ShopItem; price: number } => x !== null)
+        : [],
+    [shopOffer],
+  );
+
+  const [selectedIdx, setSelectedIdx] = useState(0);
+
+  useEffect(() => {
+    if (offerItems.length === 0) return;
+    if (selectedIdx >= offerItems.length) setSelectedIdx(0);
+  }, [offerItems.length, selectedIdx]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (offerItems.length === 0) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) {
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setSelectedIdx((i) => (i - 1 + offerItems.length) % offerItems.length);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setSelectedIdx((i) => (i + 1) % offerItems.length);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const pick = offerItems[selectedIdx];
+        if (!pick) return;
+        if (balance < pick.price) return;
+        onBuy(pick.item.id);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [offerItems, selectedIdx, balance, onBuy]);
 
   return (
     <div className="mt-4 pt-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
@@ -236,7 +285,7 @@ function ShopSection({
           Shop · Fresh Drops
         </h3>
         <span className="font-mono text-[10px] text-white/40">
-          {ownedCount > 0 ? `${ownedCount} owned · ` : ""}rerolls at next round
+          {ownedCount > 0 ? `${ownedCount} owned · ` : ""}← → select · Enter buys
         </span>
       </div>
       {offerItems.length === 0 ? (
@@ -245,12 +294,19 @@ function ShopSection({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {offerItems.map(({ item, price }) => {
+          {offerItems.map(({ item, price }, idx) => {
             const unaffordable = balance < price;
+            const consumable = isConsumable(item);
+            const selected = idx === selectedIdx;
             return (
               <div
                 key={item.id}
-                className="rounded-lg px-2.5 py-1.5 shadow-ring-w bg-white/[0.02] min-w-0"
+                onMouseEnter={() => setSelectedIdx(idx)}
+                className={`rounded-lg px-2.5 py-1.5 bg-white/[0.02] min-w-0 transition ${
+                  selected
+                    ? "shadow-[inset_0_0_0_1px_rgba(255,61,0,0.6)] bg-warp-orange/[0.06]"
+                    : "shadow-ring-w"
+                }`}
               >
                 <div className="flex items-center gap-2 text-[11px] leading-tight mb-1 min-w-0">
                   <span className="text-base leading-none shrink-0">
@@ -260,6 +316,11 @@ function ShopSection({
                     {item.name}
                   </span>
                   <RarityChip rarity={item.rarity} />
+                  {consumable && (
+                    <span className="font-brand text-[9px] uppercase tracking-[0.14em] px-1 py-[1px] rounded text-emerald-300 shadow-[inset_0_0_0_1px_rgba(52,211,153,0.3)]">
+                      rebuy
+                    </span>
+                  )}
                   <span className="ml-auto text-emerald-300 truncate min-w-0 shrink-0 max-w-[55%] text-right">
                     {formatItemEffect(item.effect)}
                   </span>

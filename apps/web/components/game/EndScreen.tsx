@@ -7,6 +7,7 @@ import { useShallow } from "zustand/react/shallow";
 import { valuation } from "@/lib/game/valuation";
 import { teamDistribution } from "@/lib/game/selectors";
 import { WARP_URL } from "@/lib/game/constants";
+import { itemById } from "@/lib/game/items";
 import {
   fetchBoard,
   submitScore,
@@ -22,6 +23,17 @@ function fmtVal(n: number): string {
     : n >= 1_000_000
       ? `$${(n / 1_000_000).toFixed(1)}M`
       : `$${(n / 1_000).toFixed(0)}k`;
+}
+
+function fmtPrice(n: number): string {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${Math.round(n / 1_000)}k`;
+  return `$${Math.round(n)}`;
+}
+
+function shortName(name: string, max = 16): string {
+  if (name.length <= max) return name;
+  return name.slice(0, max - 1).trimEnd() + "…";
 }
 
 type SubmitMode = "input" | "sending" | "submitted" | "error";
@@ -47,6 +59,7 @@ export function EndScreen() {
         peakHeadcount: s.peakHeadcount,
         revenue: s.revenuePerWeek,
         coveredCategories: dist.coveredCategories,
+        purchases: s.purchases,
       };
     })
   );
@@ -111,19 +124,48 @@ export function EndScreen() {
   const valStr = fmtVal(val);
 
   // Rank = position among submitted rows, using the same sort as the board
-  // (weeks desc, then valuation desc). Counts rows strictly better than mine.
+  // (peak headcount desc, then valuation desc). Counts rows strictly better.
   const betterThanMe = (rows ?? []).filter((r) =>
-    r.weeks_survived > state.week ||
-    (r.weeks_survived === state.week && r.final_valuation > val)
+    r.peak_headcount > state.peakHeadcount ||
+    (r.peak_headcount === state.peakHeadcount && r.final_valuation > val)
   ).length;
   const rank = betterThanMe + 1;
   const rankStr = rows && rows.length > 0 ? `#${rank}` : null;
 
-  const shareText = isUnicorn
-    ? `🦄 Hit UNICORN on Warp Runway${rankStr ? ` — ranked ${rankStr}` : ""}.\n\nSurvived ${state.week} weeks. Team of ${state.peakHeadcount}. ${valStr} valuation.\n\nBeat me:`
+  const rankLine = isUnicorn
+    ? `${rankStr ?? "🦄 UNICORN"} on Warp Runway 🏆`
     : isFired
-      ? `📉 Ranked ${rankStr ?? "unranked"} on Warp Runway — fired by the board at week ${state.week}.\n\nTeam of ${state.peakHeadcount}, ${balStr} left. Never hit unicorn ($1B valuation).\n\nBeat me:`
-      : `💀 Ranked ${rankStr ?? "unranked"} on Warp Runway\n\nLasted ${state.week} weeks. Burned ${balStr} running a team of ${state.peakHeadcount}. Never hit unicorn ($1B valuation).\n\nBeat me:`;
+      ? rankStr
+        ? `Ranked ${rankStr} on Warp Runway — fired at week ${state.week}`
+        : `Fired by the board at week ${state.week} on Warp Runway`
+      : rankStr
+        ? `Ranked ${rankStr} on Warp Runway — burned at week ${state.week}`
+        : `Burned at week ${state.week} on Warp Runway`;
+
+  const topPurchases = [...state.purchases]
+    .sort((a, b) => b.price - a.price)
+    .slice(0, 4)
+    .map((p) => {
+      const item = itemById(p.itemId);
+      if (!item) return null;
+      return `${item.icon} ${shortName(item.name)}  ${fmtPrice(p.price)}`;
+    })
+    .filter((s): s is string => s !== null);
+
+  const statsLine = `${state.week} wks · team of ${state.peakHeadcount} · ${valStr}`;
+
+  const shareText = [
+    rankLine,
+    topPurchases.length > 0 ? "" : null,
+    topPurchases.length > 0 ? topPurchases.join("\n") : null,
+    "",
+    statsLine,
+    "",
+    "Beat me:",
+  ]
+    .filter((l): l is string => l !== null)
+    .join("\n");
+
   const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
     shareText
   )}&url=${encodeURIComponent(playUrl)}`;
@@ -250,7 +292,7 @@ export function EndScreen() {
             <h3 className="font-brand text-sm font-medium text-warp-accent-3">Leaderboard</h3>
             <span className="font-brand text-[10px] uppercase tracking-[0.14em] text-white/40">
               {boardSource === "api"
-                ? "live · top by weeks survived"
+                ? "live · top by hiring ambition"
                 : boardSource === "mixed"
                   ? "live + local"
                   : "local only"}
@@ -258,12 +300,12 @@ export function EndScreen() {
           </div>
 
           <ol className="space-y-1 text-sm font-mono">
-            <li className="grid grid-cols-[2.5rem_1fr_2.5rem_2.5rem_3.5rem] gap-2 text-[10px] uppercase tracking-wide text-slate-500 px-2">
+            <li className="grid grid-cols-[2.5rem_1fr_2.5rem_3.5rem_2.5rem] gap-2 text-[10px] uppercase tracking-wide text-slate-500 px-2">
               <span>#</span>
               <span>handle</span>
-              <span className="text-right">wks</span>
               <span className="text-right">team</span>
               <span className="text-right">val</span>
+              <span className="text-right">wks</span>
             </li>
 
             {topRows.length === 0 && mode !== "submitted" ? (
@@ -280,7 +322,7 @@ export function EndScreen() {
               return (
                 <li
                   key={`${r.handle}-${r.created_at}`}
-                  className={`grid grid-cols-[2.5rem_1fr_2.5rem_2.5rem_3.5rem] gap-2 px-2 py-1 rounded ${
+                  className={`grid grid-cols-[2.5rem_1fr_2.5rem_3.5rem_2.5rem] gap-2 px-2 py-1 rounded ${
                     mine ? youAccent : "text-slate-300"
                   }`}
                 >
@@ -289,13 +331,13 @@ export function EndScreen() {
                   </span>
                   <span className="truncate">{r.handle}</span>
                   <span className="text-right tabular-nums">
-                    {r.weeks_survived}
-                  </span>
-                  <span className="text-right tabular-nums">
                     {r.peak_headcount}
                   </span>
                   <span className="text-right tabular-nums">
                     {fmtVal(r.final_valuation)}
+                  </span>
+                  <span className="text-right tabular-nums">
+                    {r.weeks_survived}
                   </span>
                 </li>
               );
@@ -304,7 +346,7 @@ export function EndScreen() {
             {/* User's death row — hidden only if they submitted AND made the top list */}
             {!userIsTop ? (
               <li
-                className={`grid grid-cols-[2.5rem_1fr_2.5rem_2.5rem_3.5rem] gap-2 px-2 py-1 rounded items-center ${youAccent}`}
+                className={`grid grid-cols-[2.5rem_1fr_2.5rem_3.5rem_2.5rem] gap-2 px-2 py-1 rounded items-center ${youAccent}`}
               >
                 <span className="font-bold tabular-nums">{rank}</span>
                 <HandleCell
@@ -320,13 +362,13 @@ export function EndScreen() {
                   inputRef={inputRef}
                 />
                 <span className="text-right tabular-nums">
-                  {youMetrics.weeks}
-                </span>
-                <span className="text-right tabular-nums">
                   {youMetrics.team}
                 </span>
                 <span className="text-right tabular-nums">
                   {fmtVal(youMetrics.val)}
+                </span>
+                <span className="text-right tabular-nums">
+                  {youMetrics.weeks}
                 </span>
               </li>
             ) : null}

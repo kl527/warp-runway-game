@@ -68,6 +68,7 @@ import { EVENTS, rollEvent, type GameEventDef } from "./events";
 import { computeSynergies } from "./synergies";
 import {
   aggregateRevenueEffects,
+  isConsumable,
   itemById,
   rollShopOffer,
 } from "./items";
@@ -129,6 +130,7 @@ export function initialState(): GameState {
     fundraiseLockoutUntilWeek: 0,
     hireCooldownUntilWeek: 0,
     ownedItems: [],
+    purchases: [],
     shopOffer: initialOffer,
     buildingEggSeen: false,
   };
@@ -507,22 +509,32 @@ export function buyShopItem(s: GameState, itemId: string): GameState {
   const price = s.shopOffer.prices[offerIdx];
   if (s.balance < price) return s;
 
-  const newOfferItems = s.shopOffer.itemIds.slice();
-  const newOfferPrices = s.shopOffer.prices.slice();
-  newOfferItems.splice(offerIdx, 1);
-  newOfferPrices.splice(offerIdx, 1);
+  const consumable = isConsumable(item);
+
+  // Consumables stay in the shop and aren't tracked on ownedItems — they
+  // apply their one-shot effect each purchase and can be re-bought freely.
+  const nextOffer = consumable
+    ? s.shopOffer
+    : (() => {
+        const newOfferItems = s.shopOffer!.itemIds.slice();
+        const newOfferPrices = s.shopOffer!.prices.slice();
+        newOfferItems.splice(offerIdx, 1);
+        newOfferPrices.splice(offerIdx, 1);
+        return {
+          roundIdx: s.shopOffer!.roundIdx,
+          itemIds: newOfferItems,
+          prices: newOfferPrices,
+        };
+      })();
 
   let next: GameState = {
     ...s,
     balance: s.balance - price,
-    ownedItems: [...s.ownedItems, itemId],
+    ownedItems: consumable ? s.ownedItems : [...s.ownedItems, itemId],
+    purchases: [...s.purchases, { itemId, price, week: s.week }],
     employees: s.employees.slice(),
     eventLog: s.eventLog.slice(),
-    shopOffer: {
-      roundIdx: s.shopOffer.roundIdx,
-      itemIds: newOfferItems,
-      prices: newOfferPrices,
-    },
+    shopOffer: nextOffer,
   };
 
   const eff = item.effect;

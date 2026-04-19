@@ -37,8 +37,8 @@ function writeLocal(row: LeaderboardRow) {
 
 function sortRows(rows: LeaderboardRow[]): LeaderboardRow[] {
   return [...rows].sort((a, b) => {
-    if (b.weeks_survived !== a.weeks_survived)
-      return b.weeks_survived - a.weeks_survived;
+    if (b.peak_headcount !== a.peak_headcount)
+      return b.peak_headcount - a.peak_headcount;
     return b.final_valuation - a.final_valuation;
   });
 }

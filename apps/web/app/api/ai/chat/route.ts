@@ -8,8 +8,6 @@ import {
   BOARD_OBSERVER_JUDGE_USER,
 } from "@/lib/ai/prompts";
 
-export const runtime = "edge";
-
 const bodySchema = z.object({
   answer: z.string().min(1).max(2000),
 });
