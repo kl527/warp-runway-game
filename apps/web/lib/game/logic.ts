@@ -48,7 +48,15 @@ import {
   TEAM_IMBALANCE_MORALE_PENALTY,
 } from "./constants";
 import type { LocationId, RoleCategory } from "./constants";
-import { cellKey, getMap, inOffice, isWalkable, kindAt, officeCapacity } from "./map";
+import {
+  cellKey,
+  getMap,
+  getRoomRects,
+  inOffice,
+  isWalkable,
+  kindAt,
+  officeCapacity,
+} from "./map";
 import { makeName } from "./names";
 import { roleById, ROLES } from "./roles";
 import type { ChoiceOption, EasterEgg, Employee, GameState, LogEntry, Role, RoundId } from "./state";
@@ -58,6 +66,11 @@ import { teamDistribution } from "./selectors";
 import { ROLE_CATEGORIES } from "./constants";
 import { EVENTS, rollEvent, type GameEventDef } from "./events";
 import { computeSynergies } from "./synergies";
+import {
+  aggregateRevenueEffects,
+  itemById,
+  rollShopOffer,
+} from "./items";
 
 // Deterministic-ish RNG seeded by rngSeed. Mulberry32.
 function makeRng(seed: number): () => number {
@@ -73,6 +86,8 @@ function makeRng(seed: number): () => number {
 
 export function initialState(): GameState {
   const startMap = getMap("pre-seed");
+  const seed = Math.floor(Math.random() * 2 ** 31);
+  const initialOffer = rollShopOffer(makeRng(seed + 9901), -1);
   return {
     week: 0,
     balance: STARTING_BALANCE,
@@ -106,13 +121,16 @@ export function initialState(): GameState {
         headcount: 0,
       },
     ],
-    rngSeed: Math.floor(Math.random() * 2 ** 31),
+    rngSeed: seed,
     easterEggs: [],
     boardConfidence: BOARD_CONFIDENCE_START,
     revenueAtLastRound: 0,
     weekOfLastRound: 0,
     fundraiseLockoutUntilWeek: 0,
     hireCooldownUntilWeek: 0,
+    ownedItems: [],
+    shopOffer: initialOffer,
+    buildingEggSeen: false,
   };
 }
 
@@ -169,6 +187,9 @@ function recomputeRevenue(s: GameState): void {
     if (eff.revenue_delta) base += eff.revenue_delta;
     if (eff.revenue_multiplier_bonus) mult += eff.revenue_multiplier_bonus;
   }
+  const itemEff = aggregateRevenueEffects(s.ownedItems);
+  base += itemEff.revenueDelta;
+  mult += itemEff.revenueMultBonus;
   // Morale modifier: 50% morale = 0.8x, 100% = 1.1x.
   const moraleMod = 0.8 + (s.morale / 100) * 0.3;
   const preSynergy = base * mult * moraleMod;
@@ -239,7 +260,36 @@ export function move(s: GameState, dx: number, dy: number): GameState {
   if (!isWalkable(map, nx, ny)) return s;
   let next: GameState = { ...s, position: { x: nx, y: ny } };
   next = rescueAt(next, nx, ny);
-  return collectEggAt(next, nx, ny);
+  next = collectEggAt(next, nx, ny);
+  return checkBuildingEgg(next, nx, ny);
+}
+
+// Hidden easter egg: once the player reaches Series A, brushing up against
+// one of the new decor buildings (lab/lounge/all-hands) pops a Warp discount
+// offer modal. Fires at most once per run.
+function checkBuildingEgg(s: GameState, x: number, y: number): GameState {
+  if (s.buildingEggSeen || s.modal) return s;
+  if (!s.round.startsWith("series-")) return s;
+  const rects = getRoomRects(s.round);
+  let hit = false;
+  for (const r of rects) {
+    if (r.kind !== "lab" && r.kind !== "lounge" && r.kind !== "allhands") continue;
+    const inBox = x >= r.x - 1 && x <= r.x + r.w && y >= r.y - 1 && y <= r.y + r.h;
+    if (!inBox) continue;
+    const strictlyInside =
+      x > r.x && x < r.x + r.w - 1 && y > r.y && y < r.y + r.h - 1;
+    if (!strictlyInside) {
+      hit = true;
+      break;
+    }
+  }
+  if (!hit) return s;
+  return {
+    ...s,
+    buildingEggSeen: true,
+    modal: { kind: "building_egg" },
+    paused: true,
+  };
 }
 
 function rescueAt(s: GameState, x: number, y: number): GameState {
@@ -446,6 +496,62 @@ function findOfficeSpot(
   return { x: b.x0, y: b.y0 };
 }
 
+// ---- shop ----
+
+export function buyShopItem(s: GameState, itemId: string): GameState {
+  if (s.gameOver || !s.shopOffer) return s;
+  const offerIdx = s.shopOffer.itemIds.indexOf(itemId);
+  if (offerIdx < 0) return s;
+  const item = itemById(itemId);
+  if (!item) return s;
+  const price = s.shopOffer.prices[offerIdx];
+  if (s.balance < price) return s;
+
+  const newOfferItems = s.shopOffer.itemIds.slice();
+  const newOfferPrices = s.shopOffer.prices.slice();
+  newOfferItems.splice(offerIdx, 1);
+  newOfferPrices.splice(offerIdx, 1);
+
+  let next: GameState = {
+    ...s,
+    balance: s.balance - price,
+    ownedItems: [...s.ownedItems, itemId],
+    employees: s.employees.slice(),
+    eventLog: s.eventLog.slice(),
+    shopOffer: {
+      roundIdx: s.shopOffer.roundIdx,
+      itemIds: newOfferItems,
+      prices: newOfferPrices,
+    },
+  };
+
+  const eff = item.effect;
+  if (eff.moraleBoost) {
+    next.employees = next.employees.map((e) => ({
+      ...e,
+      morale: Math.max(0, Math.min(100, e.morale + eff.moraleBoost!)),
+    }));
+  }
+  if (eff.boardConfidenceBoost) {
+    next.boardConfidence = Math.min(
+      100,
+      next.boardConfidence + eff.boardConfidenceBoost,
+    );
+  }
+  if (eff.cashGrant) {
+    next.balance += eff.cashGrant;
+  }
+
+  recomputeMorale(next);
+  recomputeRevenue(next);
+  pushLog(next, {
+    week: next.week,
+    message: `Bought ${item.name} for $${price.toLocaleString()}.`,
+    tone: "warp",
+  });
+  return next;
+}
+
 // ---- easter eggs ----
 
 function tickEasterEggs(s: GameState, rng: () => number): GameState {
@@ -601,6 +707,9 @@ export function fundraise(
 
   const nextRound: RoundId = def.roundAfter;
   const newMap = getMap(nextRound);
+  const newRoundIdx = FUNDRAISE_ROUNDS.findIndex((r) => r.id === nextRound);
+  const offerRng = makeRng(s.rngSeed + s.week * 9901 + idx * 313);
+  const freshOffer = rollShopOffer(offerRng, newRoundIdx);
 
   // Rehome anyone landing on a now-invalid tile (room walls shift between maps).
   const relocRng = makeRng(s.rngSeed + s.week * 2111);
@@ -634,6 +743,7 @@ export function fundraise(
     weekOfLastRound: s.week,
     boardConfidence: Math.min(100, s.boardConfidence + 25),
     fundraiseLockoutUntilWeek: 0,
+    shopOffer: freshOffer,
   };
   const prevBurn = weeklyBurn(s);
   const newBurn = weeklyBurn(next);
@@ -642,6 +752,11 @@ export function fundraise(
     week: s.week,
     message: `Closed ${def.label}: $${(def.check / 1_000_000).toFixed(0)}M at ${Math.round(def.dilution * 100)}% dilution. Office expanded — overhead +$${burnDelta.toLocaleString()}/wk.`,
     tone: "good",
+  });
+  pushLog(next, {
+    week: s.week,
+    message: `Fresh drops in the HIRE shop — ${freshOffer.itemIds.length} items rolled.`,
+    tone: "warp",
   });
   return next;
 }

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useGameStore, useActions } from "@/lib/game/store";
 import { selectHUD } from "@/lib/game/selectors";
 import { useShallow } from "zustand/react/shallow";
+import { useSfxMuted } from "@/lib/game/sounds";
 
 function fmt(n: number): string {
   if (!isFinite(n)) return "inf";
@@ -34,6 +35,7 @@ function balanceGlow(pct: number): string {
 export function HUD() {
   const hud = useGameStore(useShallow(selectHUD));
   const actions = useActions();
+  const [muted, setMuted] = useSfxMuted();
   const pct = hud.startingBalance > 0 ? hud.balance / hud.startingBalance : 0;
   const barPct = Math.max(0, Math.min(1, pct)) * 100;
 
@@ -86,6 +88,17 @@ export function HUD() {
       <Stat label="VAL" value={fmtMoney(hud.valuation)} />
 
       <div className="ml-auto flex items-center gap-2">
+        <button
+          onClick={() => setMuted(!muted)}
+          className={`px-2 py-1 rounded shadow-ring-w hover:bg-white/[0.04] transition font-brand text-[10px] md:text-xs uppercase tracking-[0.14em] ${
+            muted ? "text-white/40" : "text-white/80"
+          }`}
+          aria-label={muted ? "Unmute sounds" : "Mute sounds"}
+          aria-pressed={muted}
+          title={muted ? "Sounds muted" : "Sounds on"}
+        >
+          {muted ? "SFX OFF" : "SFX ON"}
+        </button>
         <button
           onClick={actions.togglePause}
           className="px-2 py-1 rounded shadow-ring-w hover:bg-white/[0.04] transition text-white/80"

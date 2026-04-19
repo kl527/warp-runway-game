@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { LocationId } from "./constants";
 import {
+  buyShopItem as pureBuyShopItem,
   closeModal as pureCloseModal,
   fundraise as pureFundraise,
   hire as pureHire,
@@ -23,6 +24,7 @@ export interface GameActions {
   hire: (roleId: string, location: LocationId) => void;
   hireMany: (roleId: string, location: LocationId, qty: number) => void;
   fundraise: (idx: number) => void;
+  buyShopItem: (itemId: string) => void;
   tick: () => void;
   togglePause: () => void;
   setSpeed: (speed: 1 | 2) => void;
@@ -44,6 +46,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     hireMany: (roleId, location, qty) =>
       set((s) => pureHireMany(s, roleId, location, qty)),
     fundraise: (idx) => set((s) => pureFundraise(s, idx)),
+    buyShopItem: (itemId) => set((s) => pureBuyShopItem(s, itemId)),
     tick: () => set((s) => pureTick(s)),
     togglePause: () => set((s) => pureTogglePause(s)),
     setSpeed: (speed) => set((s) => pureSetSpeed(s, speed)),

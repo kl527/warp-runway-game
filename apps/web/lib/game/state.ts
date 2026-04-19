@@ -69,7 +69,8 @@ export type ModalKind =
   | "dashboard"
   | "choice"
   | "ai_critic"
-  | "ai_pitch";
+  | "ai_pitch"
+  | "building_egg";
 
 export interface ChoiceOption {
   key: string;
@@ -131,4 +132,18 @@ export interface GameState {
   fundraiseLockoutUntilWeek: number;
   // Hiring locked out until this week (exclusive) after the last successful hire.
   hireCooldownUntilWeek: number;
+  // Items purchased from the HIRE shop. Effects fold into revenue/burn
+  // recomputes each tick, and one-shot bonuses apply at purchase time.
+  ownedItems: string[];
+  // Current shop offer, rolled at the start of the run and refreshed each
+  // time a round closes. Null between the purchase-all moment and the next
+  // round close (rare).
+  shopOffer: {
+    roundIdx: number;
+    itemIds: string[];
+    prices: number[];
+  } | null;
+  // One-shot hidden egg: fires when the player steps up to a newer decor
+  // building (lab/lounge/all-hands) once they've reached Series A or beyond.
+  buildingEggSeen: boolean;
 }

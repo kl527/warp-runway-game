@@ -11,6 +11,7 @@ import {
 } from "./constants";
 import { roleById } from "./roles";
 import type { GameState, Role } from "./state";
+import { aggregateBurnDelta } from "./items";
 
 function completedRoundIdxFor(round: GameState["round"]): number {
   if (round === "pre-seed") return -1;
@@ -21,12 +22,17 @@ export function valuation(s: Pick<GameState, "revenuePerWeek">): number {
   return Math.max(0, Math.round(s.revenuePerWeek * 52 * VALUATION_MULTIPLIER));
 }
 
-export function weeklyBurn(s: Pick<GameState, "employees" | "round">): number {
+export function weeklyBurn(
+  s: Pick<GameState, "employees" | "round"> & { ownedItems?: string[] },
+): number {
   const overheadMult = roundBurnMultiplier(completedRoundIdxFor(s.round));
   let total = BASE_WEEKLY_BURN * overheadMult;
   for (const e of s.employees) {
     const mult = LOCATION_MULTIPLIERS[e.location];
     total += (e.role.baseSalary * mult) / 52;
+  }
+  if (s.ownedItems && s.ownedItems.length > 0) {
+    total += aggregateBurnDelta(s.ownedItems);
   }
   return Math.round(total);
 }

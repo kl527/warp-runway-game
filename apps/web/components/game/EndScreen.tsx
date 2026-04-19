@@ -7,7 +7,6 @@ import { useShallow } from "zustand/react/shallow";
 import { valuation } from "@/lib/game/valuation";
 import { teamDistribution } from "@/lib/game/selectors";
 import { WARP_URL } from "@/lib/game/constants";
-import { useDeathSound, useLevelUpSound } from "@/lib/game/sounds";
 import {
   fetchBoard,
   submitScore,
@@ -36,8 +35,6 @@ export function EndScreen() {
   const [myRow, setMyRow] = useState<LeaderboardRow | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const confettiFired = useRef(false);
-  const playDeath = useDeathSound();
-  const playLevelUp = useLevelUpSound();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const state = useGameStore(
@@ -79,26 +76,23 @@ export function EndScreen() {
 
   useEffect(() => {
     if (!state.gameOver) return;
-    if (isUnicorn) {
-      playLevelUp();
-      if (!confettiFired.current) {
-        confettiFired.current = true;
-        import("canvas-confetti")
-          .then((m) => {
-            const confetti = m.default;
-            confetti({ particleCount: 180, spread: 90, origin: { y: 0.6 } });
-            setTimeout(
-              () =>
-                confetti({ particleCount: 120, spread: 120, origin: { y: 0.4 } }),
-              400
-            );
-          })
-          .catch(() => {});
-      }
-    } else {
-      playDeath();
+    // Death / level_up SFX are played by useSoundEffects on the gameOver
+    // transition — this effect owns the confetti-only unicorn payoff.
+    if (isUnicorn && !confettiFired.current) {
+      confettiFired.current = true;
+      import("canvas-confetti")
+        .then((m) => {
+          const confetti = m.default;
+          confetti({ particleCount: 180, spread: 90, origin: { y: 0.6 } });
+          setTimeout(
+            () =>
+              confetti({ particleCount: 120, spread: 120, origin: { y: 0.4 } }),
+            400
+          );
+        })
+        .catch(() => {});
     }
-  }, [state.gameOver, isUnicorn, playDeath, playLevelUp]);
+  }, [state.gameOver, isUnicorn]);
 
   if (!state.gameOver) return null;
 

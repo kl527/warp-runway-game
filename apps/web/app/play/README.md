@@ -63,7 +63,16 @@ On game over:
 
 ### Sounds
 
-`lib/game/sounds.ts` exposes four `useSound` hooks. If the `.wav` files do not exist in `public/sounds/`, Howler logs a warning at runtime but does not throw, so the build is safe. Files can be dropped in later.
+`lib/game/sounds.ts` exposes a preloaded `sfx` singleton (Howl per id) with a `play(id)` method. Missing `.wav` files produce a Howler warning at runtime but do not throw, so the build is safe.
+
+Two trigger paths:
+
+1. **Click-driven** (component call site): `sfx.play("hire")` in `HireModal`, `sfx.play("cash")` in `FundraiseModal`, and `sfx.play("footstep")` in the `GameShell` movement keybinds.
+2. **State-driven** (subscriber): `lib/game/useSoundEffects.ts` is mounted once in `GameShell`, diffs the Zustand store, and plays the right SFX on transitions — employee quits, yellow-flag alerts, easter-egg pickups, fundraise success/fail, modal open/close, terminal states (death/level_up), coffee interaction, and a log-tone fallback (`event_good`/`event_bad`) for events that don't map to a more specific sound.
+
+Mute state is persisted in `localStorage` under `warp-runway:sfx-muted`. The HUD toggle (`SFX ON` / `SFX OFF`) uses `useSfxMuted()`.
+
+Expected files in `public/sounds/`: `hire.wav`, `cash.wav`, `death.wav`, `level_up.wav`, `footstep.wav`, `coffee.wav`, `egg_pickup.wav`, `quit_alert.wav`, `quit_leave.wav`, `fundraise_success.wav`, `fundraise_fail.wav`, `event_good.wav`, `event_bad.wav`, `modal_open.wav`, `modal_close.wav`.
 
 ### Mobile
 

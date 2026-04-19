@@ -5,7 +5,6 @@ import { useActions, useGameStore } from "@/lib/game/store";
 import { canFundraise, completedRoundIdx, fundraiseOdds } from "@/lib/game/logic";
 import { ModalShell } from "./ModalShell";
 import { useShallow } from "zustand/react/shallow";
-import { useCashSound } from "@/lib/game/sounds";
 
 export function FundraiseModal() {
   const actions = useActions();
@@ -18,7 +17,6 @@ export function FundraiseModal() {
     }))
   );
   const fullState = useGameStore.getState();
-  const playCash = useCashSound();
 
   const completed = completedRoundIdx(fullState);
   const startIdx = completed + 1;
@@ -73,10 +71,7 @@ export function FundraiseModal() {
                   )}
                 </div>
                 <button
-                  onClick={() => {
-                    playCash();
-                    actions.fundraise(idx);
-                  }}
+                  onClick={() => actions.fundraise(idx)}
                   disabled={!gate.ok}
                   className="px-3 py-1 rounded-lg bg-warp-orange text-white text-sm font-medium hover:bg-warp-orange-hover transition disabled:bg-white/[0.05] disabled:text-white/30"
                 >

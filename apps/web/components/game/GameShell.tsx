@@ -19,8 +19,12 @@ import { FundraiseModal } from "./modals/FundraiseModal";
 import { DashboardOverlay } from "./modals/DashboardOverlay";
 import { ChoiceModal } from "./modals/ChoiceModal";
 import { AiCriticModal } from "./modals/AiCriticModal";
+import { PauseModal } from "./modals/PauseModal";
+import { BuildingEggModal } from "./modals/BuildingEggModal";
 import { EndScreen } from "./EndScreen";
 import { MobileBlock } from "./MobileBlock";
+import { useSoundEffects } from "@/lib/game/useSoundEffects";
+import { sfx } from "@/lib/game/sounds";
 
 function useIsMobile(): boolean {
   const [narrow, setNarrow] = useState(false);
@@ -43,6 +47,8 @@ export function GameShell() {
   const narrow = useIsMobile();
   const lastCritiqueWeek = useRef(0);
   const critiqueInFlight = useRef(false);
+
+  useSoundEffects();
 
   useEffect(() => {
     if (gameOver || modal || paused) return;
@@ -85,34 +91,56 @@ export function GameShell() {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault();
-        actions.closeModal();
+        if (modal) actions.closeModal();
+        else if (paused) actions.togglePause();
         return;
       }
-      if (modal || gameOver) return;
+      if (modal) {
+        if (e.key === " ") {
+          const target = e.target as HTMLElement | null;
+          const tag = target?.tagName;
+          if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+          e.preventDefault();
+          actions.closeModal();
+        }
+        return;
+      }
+      if (paused) {
+        if (e.key === "p" || e.key === "P") {
+          e.preventDefault();
+          actions.togglePause();
+        }
+        return;
+      }
+      if (gameOver) return;
       switch (e.key) {
         case "ArrowUp":
         case "w":
         case "W":
           e.preventDefault();
           actions.move(0, -1);
+          sfx.play("footstep");
           break;
         case "ArrowDown":
         case "s":
         case "S":
           e.preventDefault();
           actions.move(0, 1);
+          sfx.play("footstep");
           break;
         case "ArrowLeft":
         case "a":
         case "A":
           e.preventDefault();
           actions.move(-1, 0);
+          sfx.play("footstep");
           break;
         case "ArrowRight":
         case "d":
         case "D":
           e.preventDefault();
           actions.move(1, 0);
+          sfx.play("footstep");
           break;
         case " ":
         case "Enter":
@@ -128,7 +156,7 @@ export function GameShell() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [actions, modal, gameOver]);
+  }, [actions, modal, gameOver, paused]);
 
   // Tick loop.
   useEffect(() => {
@@ -153,6 +181,8 @@ export function GameShell() {
         {modal?.kind === "dashboard" && <DashboardOverlay key="dash" />}
         {modal?.kind === "choice" && <ChoiceModal key="choice" />}
         {modal?.kind === "ai_critic" && <AiCriticModal key="aicritic" />}
+        {modal?.kind === "building_egg" && <BuildingEggModal key="egg" />}
+        {paused && !modal && !gameOver && <PauseModal key="pause" />}
       </AnimatePresence>
       {gameOver && <EndScreen />}
     </main>

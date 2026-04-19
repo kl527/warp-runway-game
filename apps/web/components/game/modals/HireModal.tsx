@@ -6,8 +6,14 @@ import { LOCATION_MULTIPLIERS, type LocationId } from "@/lib/game/constants";
 import { useActions, useGameStore } from "@/lib/game/store";
 import { calcHireCost, headcountByRole } from "@/lib/game/valuation";
 import { getMap, officeCapacity } from "@/lib/game/map";
+import {
+  itemById,
+  type ItemEffect,
+  type ItemRarity,
+  type ShopItem,
+} from "@/lib/game/items";
 import { ModalShell } from "./ModalShell";
-import { useHireSound } from "@/lib/game/sounds";
+import { sfx } from "@/lib/game/sounds";
 
 const LOCATIONS: LocationId[] = ["SF", "NYC", "Remote"];
 const MAX_QTY = 20;
@@ -17,9 +23,10 @@ export function HireModal() {
   const balance = useGameStore((s) => s.balance);
   const employees = useGameStore((s) => s.employees);
   const round = useGameStore((s) => s.round);
+  const shopOffer = useGameStore((s) => s.shopOffer);
+  const ownedItems = useGameStore((s) => s.ownedItems);
   const [location, setLocation] = useState<LocationId>("SF");
   const [qtyByRole, setQtyByRole] = useState<Record<string, number>>({});
-  const playHire = useHireSound();
 
   const counts = useMemo(() => headcountByRole(employees), [employees]);
   const capacity = useMemo(() => officeCapacity(getMap(round)), [round]);
@@ -48,7 +55,7 @@ export function HireModal() {
           {officeFull ? "Full — raise to expand" : `${freeSeats} free`}
         </span>
       </div>
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-3">
         {LOCATIONS.map((loc) => (
           <button
             key={loc}
@@ -64,7 +71,7 @@ export function HireModal() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {ROLES.map((role) => {
           const mult = LOCATION_MULTIPLIERS[location];
           const weeklySalary = Math.round((role.baseSalary * mult) / 52);
@@ -82,104 +89,99 @@ export function HireModal() {
           return (
             <div
               key={role.id}
-              className={`rounded-lg p-3 ${
+              className={`rounded-lg px-2.5 py-1.5 min-w-0 ${
                 role.disabled
                   ? "shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)] bg-warp-amber-9/[0.05]"
                   : "shadow-ring-w bg-white/[0.02]"
               }`}
             >
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-bold text-cyan-300">{role.char}</span>
-                <span className="font-bold text-slate-100">{role.name}</span>
-                {!role.disabled && existing > 0 && (
-                  <span className="ml-auto font-brand text-[10px] text-white/40 uppercase tracking-[0.14em]">
-                    ×{existing}
-                  </span>
-                )}
-              </div>
               {role.disabled ? (
-                <div>
-                  <p className="text-xs text-warp-amber-9 mb-2">
+                <div className="flex items-center gap-2 text-[11px] min-h-[44px]">
+                  <span className="font-bold text-cyan-300">{role.char}</span>
+                  <span className="font-bold text-slate-100">{role.name}</span>
+                  <span className="text-warp-amber-9 truncate">
                     {role.disabledTooltip}
-                  </p>
+                  </span>
                   {role.disabledUrl && (
                     <a
                       href={role.disabledUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-block text-xs underline text-warp-amber-8 hover:text-warp-amber-9"
+                      className="ml-auto underline text-warp-amber-8 hover:text-warp-amber-9 shrink-0"
                     >
-                      Visit warp.co
+                      warp.co
                     </a>
                   )}
                 </div>
               ) : (
                 <>
-                  <div className="text-xs text-white/65 space-y-0.5">
-                    <div className="flex gap-3">
-                      <span>
-                        <span className="text-white/40">Salary</span>{" "}
-                        <span className="text-white/85">
-                          ${weeklySalary.toLocaleString()}/wk
-                        </span>
+                  <div className="flex items-center gap-2 text-[11px] leading-tight mb-1 min-w-0">
+                    <span className="font-bold text-cyan-300 shrink-0">
+                      {role.char}
+                    </span>
+                    <span className="font-bold text-slate-100 shrink-0">
+                      {role.name}
+                    </span>
+                    {existing > 0 && (
+                      <span className="font-brand text-[10px] text-white/40 uppercase tracking-[0.14em] shrink-0">
+                        ×{existing}
                       </span>
-                      <span>
-                        <span className="text-white/40">Hire</span>{" "}
-                        <span className="text-white/85">
-                          ${nextCost.toLocaleString()}
-                        </span>
-                      </span>
-                    </div>
-                    <div className="text-emerald-300">
+                    )}
+                    <span className="ml-auto text-emerald-300 truncate min-w-0">
                       {formatEffect(role.weeklyEffect)}
-                    </div>
+                    </span>
                   </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="flex items-center rounded-lg shadow-ring-w overflow-hidden">
+                  <div className="flex items-center gap-2 text-[11px] min-w-0">
+                    <span className="text-white/55 tabular-nums truncate min-w-0">
+                      ${weeklySalary.toLocaleString()}/wk
+                    </span>
+                    <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center rounded shadow-ring-w overflow-hidden">
+                        <button
+                          onClick={() => setQty(role.id, qty - 1)}
+                          disabled={qty <= 1}
+                          aria-label="Decrease quantity"
+                          className="px-1.5 text-white/85 hover:bg-white/[0.05] disabled:opacity-40 transition"
+                        >
+                          −
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          max={MAX_QTY}
+                          value={qty}
+                          onChange={(e) => {
+                            const parsed = parseInt(e.target.value, 10);
+                            if (!isNaN(parsed)) setQty(role.id, parsed);
+                          }}
+                          className="w-8 bg-transparent text-center text-xs tabular-nums outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <button
+                          onClick={() => setQty(role.id, qty + 1)}
+                          disabled={qty >= MAX_QTY}
+                          aria-label="Increase quantity"
+                          className="px-1.5 text-white/85 hover:bg-white/[0.05] disabled:opacity-40 transition"
+                        >
+                          +
+                        </button>
+                      </div>
                       <button
-                        onClick={() => setQty(role.id, qty - 1)}
-                        disabled={qty <= 1}
-                        aria-label="Decrease quantity"
-                        className="px-2 py-1 text-white/85 hover:bg-white/[0.05] disabled:opacity-40 transition"
-                      >
-                        −
-                      </button>
-                      <input
-                        type="number"
-                        min={1}
-                        max={MAX_QTY}
-                        value={qty}
-                        onChange={(e) => {
-                          const parsed = parseInt(e.target.value, 10);
-                          if (!isNaN(parsed)) setQty(role.id, parsed);
+                        onClick={() => {
+                          sfx.play("hire");
+                          actions.hireMany(role.id, location, qty);
                         }}
-                        className="w-10 bg-transparent text-center text-sm tabular-nums outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                      <button
-                        onClick={() => setQty(role.id, qty + 1)}
-                        disabled={qty >= MAX_QTY}
-                        aria-label="Increase quantity"
-                        className="px-2 py-1 text-white/85 hover:bg-white/[0.05] disabled:opacity-40 transition"
+                        disabled={disabled}
+                        className="px-2.5 py-1 rounded bg-warp-orange text-white text-[11px] font-medium hover:bg-warp-orange-hover transition disabled:bg-white/[0.05] disabled:text-white/30 disabled:cursor-not-allowed whitespace-nowrap"
                       >
-                        +
+                        {officeFull
+                          ? "FULL"
+                          : overCapacity
+                            ? `${freeSeats} LEFT`
+                            : unaffordable
+                              ? "CAN'T AFFORD"
+                              : `HIRE · $${totalCost.toLocaleString()}`}
                       </button>
                     </div>
-                    <button
-                      onClick={() => {
-                        playHire();
-                        actions.hireMany(role.id, location, qty);
-                      }}
-                      disabled={disabled}
-                      className="flex-1 py-1 rounded-lg bg-warp-orange text-white text-sm font-medium hover:bg-warp-orange-hover transition disabled:bg-white/[0.05] disabled:text-white/30 disabled:cursor-not-allowed"
-                    >
-                      {officeFull
-                        ? "FULL"
-                        : overCapacity
-                        ? `${freeSeats} LEFT`
-                        : unaffordable
-                        ? "CAN'T AFFORD"
-                        : `HIRE ×${qty} · $${totalCost.toLocaleString()}`}
-                    </button>
                   </div>
                 </>
               )}
@@ -187,11 +189,133 @@ export function HireModal() {
           );
         })}
       </div>
-      <p className="font-mono text-[10px] text-white/35 mt-4">
-        Salary auto-deducted weekly. Esc to close.
+
+      <ShopSection
+        shopOffer={shopOffer}
+        ownedItems={ownedItems}
+        balance={balance}
+        onBuy={(id) => {
+          sfx.play("hire");
+          actions.buyShopItem(id);
+        }}
+      />
+
+      <p className="font-mono text-[10px] text-white/35 mt-3">
+        Salary auto-deducted weekly. Shop refreshes each round. Esc to close.
       </p>
     </ModalShell>
   );
+}
+
+function ShopSection({
+  shopOffer,
+  ownedItems,
+  balance,
+  onBuy,
+}: {
+  shopOffer: ReturnType<typeof useGameStore.getState>["shopOffer"];
+  ownedItems: string[];
+  balance: number;
+  onBuy: (id: string) => void;
+}) {
+  const ownedCount = ownedItems.length;
+  const offerItems = shopOffer
+    ? shopOffer.itemIds
+        .map((id, i) => {
+          const item = itemById(id);
+          if (!item) return null;
+          return { item, price: shopOffer.prices[i] };
+        })
+        .filter((x): x is { item: ShopItem; price: number } => x !== null)
+    : [];
+
+  return (
+    <div className="mt-4 pt-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+      <div className="flex items-baseline justify-between mb-2">
+        <h3 className="font-brand text-xs uppercase tracking-[0.14em] text-warp-accent-3">
+          Shop · Fresh Drops
+        </h3>
+        <span className="font-mono text-[10px] text-white/40">
+          {ownedCount > 0 ? `${ownedCount} owned · ` : ""}rerolls at next round
+        </span>
+      </div>
+      {offerItems.length === 0 ? (
+        <div className="text-[11px] text-white/40 italic px-1 py-2">
+          All drops claimed. Close a round to reroll.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {offerItems.map(({ item, price }) => {
+            const unaffordable = balance < price;
+            return (
+              <div
+                key={item.id}
+                className="rounded-lg px-2.5 py-1.5 shadow-ring-w bg-white/[0.02] min-w-0"
+              >
+                <div className="flex items-center gap-2 text-[11px] leading-tight mb-1 min-w-0">
+                  <span className="text-base leading-none shrink-0">
+                    {item.icon}
+                  </span>
+                  <span className="font-bold text-slate-100 truncate min-w-0">
+                    {item.name}
+                  </span>
+                  <RarityChip rarity={item.rarity} />
+                  <span className="ml-auto text-emerald-300 truncate min-w-0 shrink-0 max-w-[55%] text-right">
+                    {formatItemEffect(item.effect)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] min-w-0">
+                  <span className="text-white/50 truncate min-w-0">
+                    {item.blurb}
+                  </span>
+                  <button
+                    onClick={() => onBuy(item.id)}
+                    disabled={unaffordable}
+                    className="ml-auto shrink-0 px-2.5 py-1 rounded bg-warp-orange text-white text-[11px] font-medium hover:bg-warp-orange-hover transition disabled:bg-white/[0.05] disabled:text-white/30 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    {unaffordable
+                      ? "CAN'T AFFORD"
+                      : `BUY · $${price.toLocaleString()}`}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RarityChip({ rarity }: { rarity: ItemRarity }) {
+  const styles: Record<ItemRarity, string> = {
+    common: "text-white/45 shadow-ring-w",
+    rare: "text-sky-300 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.3)]",
+    legendary:
+      "text-amber-300 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]",
+  };
+  return (
+    <span
+      className={`font-brand text-[9px] uppercase tracking-[0.14em] px-1 py-[1px] rounded ${styles[rarity]}`}
+    >
+      {rarity}
+    </span>
+  );
+}
+
+function formatItemEffect(eff: ItemEffect): string {
+  const parts: string[] = [];
+  if (eff.revenueDelta) parts.push(`+$${eff.revenueDelta.toLocaleString()}/wk`);
+  if (eff.revenueMultBonus)
+    parts.push(`+${Math.round(eff.revenueMultBonus * 100)}% rev`);
+  if (eff.burnDelta) {
+    const sign = eff.burnDelta > 0 ? "+" : "−";
+    parts.push(`${sign}$${Math.abs(eff.burnDelta).toLocaleString()}/wk burn`);
+  }
+  if (eff.moraleBoost) parts.push(`+${eff.moraleBoost} morale`);
+  if (eff.boardConfidenceBoost) parts.push(`+${eff.boardConfidenceBoost} board`);
+  if (eff.cashGrant) parts.push(`+$${eff.cashGrant.toLocaleString()} cash`);
+  return parts.join(" · ") || "vibes";
 }
 
 function formatEffect(eff: {
